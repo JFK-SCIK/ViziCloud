@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0d0d">
+  <meta name="description" content="Album photo partagé iCloud">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="ViziCloud">
+  <title>ViziCloud</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --surface: #1a1a1a;
+      --surface2: #252525;
+      --accent: #3b82f6;
+      --accent2: #60a5fa;
+      --text: #f1f5f9;
+      --text-muted: #64748b;
+      --border: rgba(255,255,255,0.08);
+      --radius: 12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      overscroll-behavior: none;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13,13,13,0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0.875rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .logo {
+      font-size: 1.375rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      flex: 1;
+      user-select: none;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    /* ── STATUS BAR ── */
+    .status-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      display: none;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .status-bar.visible { display: flex; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── GALLERY ── */
+    .gallery {
+      padding: 0.75rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+    @media (max-width: 540px) {
+      .gallery { grid-template-columns: repeat(2, 1fr); gap: 0.375rem; }
+    }
+    @media (min-width: 1100px) {
+      .gallery { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .photo-card {
+      position: relative;
+      aspect-ratio: 1;
+      overflow: hidden;
+      border-radius: 6px;
+      background: var(--surface);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .photo-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: transparent;
+      transition: background 0.18s;
+    }
+    .photo-card:hover::after { background: rgba(255,255,255,0.06); }
+
+    .photo-card img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+    .photo-card:hover img { transform: scale(1.04); }
+
+    /* skeleton shimmer */
+    .photo-card.skeleton {
+      background: linear-gradient(90deg, var(--surface) 0%, var(--surface2) 50%, var(--surface) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s ease-in-out infinite;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .video-badge {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+      background: rgba(0,0,0,0.6);
+      border-radius: 50%;
+      width: 46px; height: 46px;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+    }
+    .video-badge svg { width: 18px; height: 18px; fill: white; margin-left: 3px; }
+
+    /* ── PAGINATION ── */
+    .pagination {
+      padding: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+    }
+    .page-info { font-size: 0.875rem; color: var(--text-muted); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:hover:not(:disabled) { background: var(--surface2); border-color: rgba(59,130,246,0.5); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── LIGHTBOX ── */
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      background: rgba(0,0,0,0.97);
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s ease;
+    }
+    .lightbox.open { opacity: 1; pointer-events: auto; }
+
+    .lb-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1rem;
+      flex-shrink: 0;
+      padding-top: calc(0.75rem + env(safe-area-inset-top));
+    }
+    .lb-counter { font-size: 0.875rem; color: var(--text-muted); }
+    .lb-actions { display: flex; gap: 0.5rem; }
+
+    .lb-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      text-decoration: none;
+    }
+    .lb-btn:hover { background: var(--surface2); }
+    .lb-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .lb-image-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    #lb-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      display: block;
+      opacity: 1;
+      transition: opacity 0.18s;
+    }
+    #lb-img.fading { opacity: 0; }
+
+    .lb-nav {
+      position: absolute;
+      top: 50%; transform: translateY(-50%);
+      width: 52px; height: 52px;
+      background: rgba(0,0,0,0.45);
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      color: white;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      z-index: 2;
+    }
+    .lb-nav:hover { background: rgba(255,255,255,0.12); }
+    .lb-prev { left: 0.75rem; }
+    .lb-next { right: 0.75rem; }
+    .lb-nav svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .lb-nav[hidden] { display: none; }
+
+    .lb-footer {
+      padding: 0.75rem 1.25rem;
+      padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+      flex-shrink: 0;
+      text-align: center;
+      min-height: 3rem;
+    }
+    .lb-caption { font-size: 0.9375rem; font-weight: 500; margin-bottom: 0.2rem; }
+    .lb-date { font-size: 0.8125rem; color: var(--text-muted); }
+
+    /* ── EMPTY / ERROR STATES ── */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-muted);
+    }
+    .empty-state h2 { font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; }
+
+    .toast {
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #dc2626;
+      color: white;
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      max-width: min(90vw, 420px);
+      text-align: center;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.25s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; pointer-events: auto; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="logo">☁ ViziCloud</span>
+  <span class="badge" id="count-badge">Chargement…</span>
+</header>
+
+<div class="status-bar" id="status-bar">
+  <div class="spinner"></div>
+  <span id="status-text">Connexion à iCloud…</span>
+</div>
+
+<main>
+  <div class="gallery" id="gallery"></div>
+  <div class="pagination" id="pagination" style="display:none"></div>
+</main>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Visionneuse photo">
+  <div class="lb-header">
+    <span class="lb-counter" id="lb-counter"></span>
+    <div class="lb-actions">
+      <button class="lb-btn" id="lb-download-btn" title="Télécharger" aria-label="Télécharger">
+        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <button class="lb-btn" id="lb-close" title="Fermer" aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="lb-image-wrap" id="lb-wrap">
+    <button class="lb-nav lb-prev" id="lb-prev" aria-label="Photo précédente">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <img id="lb-img" src="" alt="">
+    <button class="lb-nav lb-next" id="lb-next" aria-label="Photo suivante">
+      <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+
+  <div class="lb-footer">
+    <p class="lb-caption" id="lb-caption"></p>
+    <p class="lb-date" id="lb-date"></p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  'use strict';
+
+  /* ── Config ───────────────────────────────────────────── */
+  const TOKEN    = 'B0SJtdOXmeCgIG';
+  const PAGE_SIZE = 30;
+  let   apiBase  = `https://p123-sharedstreams.icloud.com/${TOKEN}/sharedstreams/`;
+
+  /* ── State ────────────────────────────────────────────── */
+  let allPhotos   = [];
+  let urlCache    = {};   // guid → { thumb, full }
+  let currentPage = 0;
+  let lbIndex     = -1;
+  let touchStartX = 0;
+
+  /* ── DOM ──────────────────────────────────────────────── */
+  const $gallery    = document.getElementById('gallery');
+  const $pagination = document.getElementById('pagination');
+  const $countBadge = document.getElementById('count-badge');
+  const $statusBar  = document.getElementById('status-bar');
+  const $statusText = document.getElementById('status-text');
+  const $lightbox   = document.getElementById('lightbox');
+  const $lbImg      = document.getElementById('lb-img');
+  const $lbCounter  = document.getElementById('lb-counter');
+  const $lbCaption  = document.getElementById('lb-caption');
+  const $lbDate     = document.getElementById('lb-date');
+  const $lbPrev     = document.getElementById('lb-prev');
+  const $lbNext     = document.getElementById('lb-next');
+  const $toast      = document.getElementById('toast');
+
+  /* ── Helpers ──────────────────────────────────────────── */
+  let toastTimer;
+  function showToast(msg) {
+    $toast.textContent = msg;
+    $toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $toast.classList.remove('show'), 4500);
+  }
+
+  function setLoading(on, msg = '') {
+    $statusBar.classList.toggle('visible', on);
+    if (msg) $statusText.textContent = msg;
+  }
+
+  function formatDate(ts) {
+    if (!ts) return '';
+    return new Date(ts * 1000).toLocaleDateString('fr-FR', {
+      year: 'numeric', month: 'long', day: 'numeric'
+    });
+  }
+
+  /* ── iCloud API ───────────────────────────────────────── */
+  async function icloudPost(endpoint, body, isRetry = false) {
+    const res = await fetch(apiBase + endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (res.status === 330 && !isRetry) {
+      try {
+        const json = await res.json();
+        const host = json['X-Apple-MMe-Host'];
+        if (host) {
+          apiBase = `https://${host}/${TOKEN}/sharedstreams/`;
+          return icloudPost(endpoint, body, true);
+        }
+      } catch (_) { /* ignore parse errors on 330 */ }
+    }
+
+    if (!res.ok) throw new Error(`Erreur ${res.status}`);
+    return res.json();
+  }
+
+  /* ── Derivative picker ────────────────────────────────── */
+  function pickDerivKey(derivatives, largest) {
+    const keys = Object.keys(derivatives).filter(k => derivatives[k]?.checksum);
+    if (!keys.length) return null;
+    return keys.reduce((best, k) => {
+      const sizeK    = (derivatives[k].width || 0) * (derivatives[k].height || 0);
+      const sizeBest = (derivatives[best].width || 0) * (derivatives[best].height || 0);
+      return largest ? (sizeK > sizeBest ? k : best) : (sizeK < sizeBest ? k : best);
+    });
+  }
+
+  /* ── Asset URL fetching ───────────────────────────────── */
+  async function ensureUrls(guids) {
+    const needed = guids.filter(g => !urlCache[g]);
+    if (!needed.length) return;
+
+    const result = await icloudPost('webasseturls', { photoGuids: needed });
+    const items = result.items || {};
+
+    for (const guid of needed) {
+      const photo = allPhotos.find(p => p.photoGuid === guid);
+      if (!photo) continue;
+      const derivs = photo.derivatives || {};
+
+      const buildUrl = (key) => {
+        if (!key) return null;
+        const checksum = derivs[key]?.checksum;
+        const loc = items[guid]?.[checksum];
+        if (!checksum || !loc) return null;
+        return `https://${loc.url_location}${loc.url_path}?fingerprint=${checksum}`;
+      };
+
+      urlCache[guid] = {
+        thumb: buildUrl(pickDerivKey(derivs, false)),
+        full:  buildUrl(pickDerivKey(derivs, true)),
+      };
+    }
+  }
+
+  /* ── Load all photos ──────────────────────────────────── */
+  async function init() {
+    setLoading(true, "Connexion à iCloud…");
+    try {
+      const stream = await icloudPost('webstream', { streamCtag: null });
+      allPhotos = (stream.photos || []).sort((a, b) => (b.dateCreated || 0) - (a.dateCreated || 0));
+      const n = allPhotos.length;
+      $countBadge.textContent = `${n} photo${n > 1 ? 's' : ''}`;
+      if (n === 0) {
+        $gallery.innerHTML = '<div class="empty-state"><h2>Album vide</h2><p>Aucune photo dans cet album.</p></div>';
+        setLoading(false);
+        return;
+      }
+      await renderPage(0);
+    } catch (e) {
+      setLoading(false);
+      $countBadge.textContent = 'Erreur';
+      $gallery.innerHTML = `<div class="empty-state"><h2>Impossible de charger l'album</h2><p>${e.message}</p></div>`;
+      showToast(`Erreur : ${e.message}`);
+    }
+  }
+
+  /* ── Render gallery page ──────────────────────────────── */
+  async function renderPage(page) {
+    currentPage = page;
+    const start = page * PAGE_SIZE;
+    const end   = Math.min(start + PAGE_SIZE, allPhotos.length);
+    const slice = allPhotos.slice(start, end);
+
+    // Skeletons
+    $gallery.innerHTML = slice.map(() => '<div class="photo-card skeleton"></div>').join('');
+    $pagination.style.display = 'none';
+
+    setLoading(true, `Photos ${start + 1}–${end} sur ${allPhotos.length}…`);
+    try {
+      await ensureUrls(slice.map(p => p.photoGuid));
+      renderGrid(slice, start);
+      renderPagination();
+    } catch (e) {
+      showToast(`Erreur de chargement : ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function renderGrid(photos, startIndex) {
+    $gallery.innerHTML = photos.map((photo, i) => {
+      const urls   = urlCache[photo.photoGuid] || {};
+      const isVid  = photo.mediaAssetType === 'video';
+      const gIndex = startIndex + i;
+      const alt    = photo.caption || `Photo ${gIndex + 1}`;
+      return `
+        <div class="photo-card" data-index="${gIndex}" role="button" tabindex="0" aria-label="${alt.replace(/"/g, '&quot;')}">
+          ${urls.thumb ? `<img src="${urls.thumb}" alt="" loading="lazy" decoding="async">` : ''}
+          ${isVid ? `<span class="video-badge" aria-label="Vidéo">
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </span>` : ''}
+        </div>`;
+    }).join('');
+
+    $gallery.querySelectorAll('.photo-card').forEach(card => {
+      const openIt = () => openLightbox(+card.dataset.index);
+      card.addEventListener('click', openIt);
+      card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } });
+    });
+  }
+
+  /* ── Pagination ───────────────────────────────────────── */
+  function renderPagination() {
+    const total = Math.ceil(allPhotos.length / PAGE_SIZE);
+    if (total <= 1) return;
+    $pagination.style.display = 'flex';
+    $pagination.innerHTML = `
+      <button class="btn" id="btn-prev" ${currentPage === 0 ? 'disabled' : ''}>← Précédente</button>
+      <span class="page-info">Page ${currentPage + 1} / ${total}</span>
+      <button class="btn" id="btn-next" ${currentPage >= total - 1 ? 'disabled' : ''}>Suivante →</button>`;
+
+    document.getElementById('btn-prev')?.addEventListener('click', () => {
+      renderPage(currentPage - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    document.getElementById('btn-next')?.addEventListener('click', () => {
+      renderPage(currentPage + 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  /* ── Lightbox ─────────────────────────────────────────── */
+  async function openLightbox(index) {
+    lbIndex = index;
+    $lightbox.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    await loadLbPhoto(index);
+  }
+
+  function closeLightbox() {
+    $lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+    $lbImg.src = '';
+    lbIndex = -1;
+  }
+
+  async function loadLbPhoto(index) {
+    const photo = allPhotos[index];
+    if (!photo) return;
+    lbIndex = index;
+
+    $lbCounter.textContent = `${index + 1} / ${allPhotos.length}`;
+    $lbCaption.textContent = photo.caption || '';
+    $lbDate.textContent    = formatDate(photo.dateCreated);
+    $lbPrev.hidden = index <= 0;
+    $lbNext.hidden = index >= allPhotos.length - 1;
+
+    $lbImg.classList.add('fading');
+    $lbImg.src = '';
+
+    if (!urlCache[photo.photoGuid]) {
+      try { await ensureUrls([photo.photoGuid]); }
+      catch (e) { showToast(`Erreur : ${e.message}`); return; }
+    }
+
+    const urls = urlCache[photo.photoGuid] || {};
+    const src  = urls.full || urls.thumb || '';
+
+    if (src) {
+      $lbImg.onload  = () => $lbImg.classList.remove('fading');
+      $lbImg.onerror = () => { $lbImg.classList.remove('fading'); showToast("Impossible de charger l'image"); };
+      $lbImg.alt = photo.caption || `Photo ${index + 1}`;
+      $lbImg.src = src;
+    }
+
+    // Download button
+    document.getElementById('lb-download-btn').onclick = () => downloadPhoto(src, `vizicloud_${index + 1}.jpg`);
+  }
+
+  async function downloadPhoto(url, filename) {
+    if (!url) return;
+    try {
+      const res  = await fetch(url);
+      const blob = await res.blob();
+      const a    = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: filename });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    } catch (_) {
+      window.open(url, '_blank');
+    }
+  }
+
+  /* ── Lightbox events ──────────────────────────────────── */
+  document.getElementById('lb-close').addEventListener('click', closeLightbox);
+
+  $lbPrev.addEventListener('click', () => { if (lbIndex > 0) loadLbPhoto(lbIndex - 1); });
+  $lbNext.addEventListener('click', () => { if (lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1); });
+
+  document.addEventListener('keydown', e => {
+    if (!$lightbox.classList.contains('open')) return;
+    if (e.key === 'Escape')      closeLightbox();
+    if (e.key === 'ArrowLeft'  && lbIndex > 0)                  loadLbPhoto(lbIndex - 1);
+    if (e.key === 'ArrowRight' && lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1);
+  });
+
+  // Swipe tactile
+  $lightbox.addEventListener('touchstart', e => {
+    touchStartX = e.changedTouches[0].clientX;
+  }, { passive: true });
+  $lightbox.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) < 50) return;
+    if (dx < 0 && lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1);
+    if (dx > 0 && lbIndex > 0)                    loadLbPhoto(lbIndex - 1);
+  }, { passive: true });
+
+  /* ── Service Worker ───────────────────────────────────── */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(console.warn);
+    });
+  }
+
+  /* ── Boot ─────────────────────────────────────────────── */
+  init();
+</script>
+</body>
+</html>
