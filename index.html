@@ -359,9 +359,13 @@
   'use strict';
 
   /* ── Config ───────────────────────────────────────────── */
-  const TOKEN    = 'B0SJtdOXmeCgIG';
+  const TOKEN     = 'B0SJtdOXmeCgIG';
   const PAGE_SIZE = 30;
-  let   apiBase  = `https://p123-sharedstreams.icloud.com/${TOKEN}/sharedstreams/`;
+  // Sur le serveur (vizicloud.duckdns.org) → proxy local, sinon appel direct iCloud
+  const USE_PROXY = !window.location.hostname.endsWith('github.io');
+  let   apiBase   = USE_PROXY
+    ? '/api/'
+    : `https://p123-sharedstreams.icloud.com/${TOKEN}/sharedstreams/`;
 
   /* ── State ────────────────────────────────────────────── */
   let allPhotos   = [];
