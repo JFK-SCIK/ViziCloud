@@ -111,7 +111,7 @@
       color: var(--text-muted);
       margin-bottom: 0.35rem;
     }
-    input[type="text"], input[type="password"] {
+    input[type="text"] {
       width: 100%;
       background: var(--surface2);
       border: 1px solid var(--border);
@@ -173,7 +173,23 @@
       vertical-align: middle;
     }
     .dot-green { background: var(--success); }
-    .dot-orange { background: var(--warning); }
+
+    /* ── DEPLOY LOG ── */
+    .deploy-log {
+      background: #0a0a0a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.75rem;
+      color: #a3e635;
+      white-space: pre-wrap;
+      max-height: 160px;
+      overflow-y: auto;
+      margin-top: 0.75rem;
+      display: none;
+    }
+    .deploy-log.open { display: block; }
 
     /* ── ALBUMS ── */
     .album-list {
@@ -231,14 +247,6 @@
     }
     .add-form-row .field { flex: 1; min-width: 140px; margin-bottom: 0; }
 
-    /* ── PAT NOTE ── */
-    .note {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 0.625rem;
-      line-height: 1.5;
-    }
-
     /* ── TOAST ── */
     .toast {
       position: fixed;
@@ -265,15 +273,13 @@
     .spin {
       display: inline-block;
       width: 13px; height: 13px;
-      border: 2px solid rgba(255,255,255,0.25);
+      border: 2px solid rgba(255,255,255,0.2);
       border-top-color: currentColor;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       vertical-align: middle;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    hr { border: none; border-top: 1px solid var(--border); margin: 0.875rem 0; }
   </style>
 </head>
 <body>
@@ -284,25 +290,10 @@
          style="width:28px;height:28px;vertical-align:middle;margin-right:0.4rem;border-radius:6px;">ViziCloud<span id="commit-ref" class="commit-ref"></span>
   </span>
   <span class="admin-badge">Admin</span>
-  <a href="index.html" class="header-link">← App</a>
+  <a href="/" class="header-link">← App</a>
 </header>
 
 <main>
-
-  <!-- ── GitHub Token ── -->
-  <div class="card">
-    <div class="card-title">🔑 Accès GitHub</div>
-    <div class="field">
-      <label for="pat-input">Personal Access Token <span style="font-weight:400">(scopes : <code style="font-size:0.8rem;color:var(--accent2)">repo</code> + <code style="font-size:0.8rem;color:var(--accent2)">actions:write</code>)</span></label>
-      <input type="password" id="pat-input" placeholder="ghp_…" autocomplete="off">
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="savePat()">Sauvegarder</button>
-      <button class="btn btn-danger" onclick="clearPat()">Effacer</button>
-      <span id="pat-status" style="font-size:0.8125rem;color:var(--text-muted)"></span>
-    </div>
-    <p class="note">Stocké uniquement dans le localStorage de votre navigateur — jamais envoyé à un tiers.</p>
-  </div>
 
   <!-- ── Déploiement ── -->
   <div class="card">
@@ -310,9 +301,11 @@
     <div class="deploy-info" id="deploy-info">
       <span><span class="spin"></span> Chargement…</span>
     </div>
-    <button class="btn btn-primary" id="btn-deploy" onclick="triggerDeploy()">
-      Déclencher un déploiement
-    </button>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-deploy" onclick="deployNow()">Déployer</button>
+      <button class="btn btn-sm" id="btn-log" onclick="toggleLog()" style="display:none">Voir les logs</button>
+    </div>
+    <pre class="deploy-log" id="deploy-log"></pre>
   </div>
 
   <!-- ── Albums ── -->
@@ -344,41 +337,21 @@
 <script>
 'use strict';
 
-const OWNER  = 'JFK-SCIK';
-const REPO   = 'ViziCloud';
-const BRANCH = 'main';
+const PWD = new URLSearchParams(location.search).get('pwd') || '';
+const Q   = PWD ? `?pwd=${encodeURIComponent(PWD)}` : '';
 
-/* ── PAT ──────────────────────────────────────────────── */
-function getPat()  { return localStorage.getItem('vc_admin_pat') || ''; }
-
-function savePat() {
-  const v = document.getElementById('pat-input').value.trim();
-  if (!v) { toast('Saisir un token', 'error'); return; }
-  localStorage.setItem('vc_admin_pat', v);
-  document.getElementById('pat-input').value = '';
-  document.getElementById('pat-status').textContent = '✓ Token configuré';
-  toast('Token sauvegardé', 'success');
-  loadDeployInfo();
-  loadAlbums();
-}
-
-function clearPat() {
-  localStorage.removeItem('vc_admin_pat');
-  document.getElementById('pat-status').textContent = '';
-  toast('Token effacé', 'info');
-}
-
-/* ── GitHub API ───────────────────────────────────────── */
-async function gh(path, opts = {}) {
-  const pat = getPat();
-  const headers = { Accept: 'application/vnd.github+json', ...opts.headers };
-  if (pat) headers.Authorization = `Bearer ${pat}`;
-  const res = await fetch(`https://api.github.com${path}`, { ...opts, headers });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.message || `HTTP ${res.status}`);
+/* ── API ──────────────────────────────────────────────── */
+async function api(method, path, body) {
+  const opts = { method };
+  if (body !== undefined) {
+    opts.headers = { 'Content-Type': 'application/json' };
+    opts.body    = JSON.stringify(body);
   }
-  if (res.status === 204) return null;
+  const res = await fetch(path + Q, opts);
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail || `HTTP ${res.status}`);
+  }
   return res.json();
 }
 
@@ -392,92 +365,88 @@ function toast(msg, type = 'info') {
   toastTimer = setTimeout(() => el.classList.remove('show'), 4500);
 }
 
-/* ── Commit ref (version.json) ────────────────────────── */
-function loadCommitRef() {
-  fetch('./version.json').then(r => r.json()).then(d => {
-    if (d?.commit) document.getElementById('commit-ref').textContent = d.commit;
-  }).catch(() => {});
-}
-
 /* ── Helpers ──────────────────────────────────────────── */
-function timeAgo(date) {
-  const s = Math.floor((Date.now() - new Date(date)) / 1000);
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function timeAgo(dateStr) {
+  const s = Math.floor((Date.now() - new Date(dateStr)) / 1000);
   if (s < 60)    return `${s}s`;
   if (s < 3600)  return `${Math.floor(s / 60)} min`;
   if (s < 86400) return `${Math.floor(s / 3600)} h`;
   return `${Math.floor(s / 86400)} j`;
 }
 
-function esc(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+/* ── Commit ref ───────────────────────────────────────── */
+function loadCommitRef() {
+  fetch('./version.json').then(r => r.json()).then(d => {
+    if (d?.commit) document.getElementById('commit-ref').textContent = d.commit;
+  }).catch(() => {});
 }
 
 /* ── Deploy info ──────────────────────────────────────── */
 async function loadDeployInfo() {
   const el = document.getElementById('deploy-info');
   try {
-    const commit = await gh(`/repos/${OWNER}/${REPO}/commits/${BRANCH}`);
-    const sha    = commit.sha.slice(0, 7);
-    const msg    = commit.commit.message.split('\n')[0];
-    const ago    = timeAgo(commit.commit.author.date);
+    const info = await api('GET', '/admin/info');
     el.innerHTML = `
-      <span><span class="dot dot-green"></span>GitHub Pages actif</span>
-      <span>Dernier commit : <code>${esc(sha)}</code> — ${esc(msg)}</span>
-      <span style="color:var(--text-muted);font-size:0.8125rem">Il y a ${ago}</span>`;
+      <span><span class="dot dot-green"></span>Serveur actif</span>
+      <span>Commit déployé : <code>${esc(info.sha)}</code> — ${esc(info.message)}</span>
+      <span style="color:var(--text-muted);font-size:0.8125rem">Il y a ${timeAgo(info.date)}</span>`;
   } catch (e) {
-    el.innerHTML = `<span style="color:var(--text-muted)">Impossible de charger les infos (${esc(e.message)})</span>`;
+    el.innerHTML = `<span style="color:var(--text-muted)">Impossible de charger (${esc(e.message)})</span>`;
   }
 }
 
-/* ── Deploy trigger ───────────────────────────────────── */
-async function triggerDeploy() {
+/* ── Deploy now ───────────────────────────────────────── */
+async function deployNow() {
   const btn = document.getElementById('btn-deploy');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> Déclenchement…';
+  btn.innerHTML = '<span class="spin"></span> Déploiement…';
   try {
-    await gh(`/repos/${OWNER}/${REPO}/actions/workflows/pages.yml/dispatches`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ref: BRANCH }),
-    });
-    toast('Déploiement déclenché !\n(mise à jour visible dans ~1 minute)', 'success');
-    setTimeout(loadDeployInfo, 4000);
+    const r = await api('POST', '/deploy/now');
+    if (r.up_to_date) {
+      toast('Déjà à jour — aucun déploiement nécessaire.', 'info');
+    } else {
+      toast('Déploiement lancé !\n(~10 secondes)', 'success');
+      document.getElementById('btn-log').style.display = '';
+      setTimeout(async () => {
+        await loadDeployInfo();
+        await refreshLog();
+      }, 8000);
+    }
   } catch (e) {
     toast(`Erreur : ${e.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Déclencher un déploiement';
+    btn.textContent = 'Déployer';
   }
 }
 
+/* ── Deploy log ───────────────────────────────────────── */
+async function refreshLog() {
+  try {
+    const r = await api('GET', '/admin/deploy/log');
+    document.getElementById('deploy-log').textContent = r.log || '(vide)';
+  } catch (_) {}
+}
+
+function toggleLog() {
+  const el  = document.getElementById('deploy-log');
+  const btn = document.getElementById('btn-log');
+  const open = !el.classList.contains('open');
+  el.classList.toggle('open', open);
+  btn.textContent = open ? 'Masquer les logs' : 'Voir les logs';
+  if (open) refreshLog();
+}
+
 /* ── Albums ───────────────────────────────────────────── */
-let albumsSha = null;
-
-async function fetchAlbums() {
-  const res = await gh(`/repos/${OWNER}/${REPO}/contents/albums.json`);
-  albumsSha  = res.sha;
-  return JSON.parse(atob(res.content.replace(/\n/g, '')));
-}
-
-async function pushAlbums(albums, message) {
-  if (!getPat()) { toast('Token GitHub requis', 'error'); return false; }
-  const content = btoa(unescape(encodeURIComponent(JSON.stringify(albums, null, 2) + '\n')));
-  await gh(`/repos/${OWNER}/${REPO}/contents/albums.json`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, content, sha: albumsSha, branch: BRANCH }),
-  });
-  return true;
-}
-
 async function loadAlbums() {
   const el = document.getElementById('album-list');
   try {
-    const albums = await fetchAlbums();
+    const albums = await api('GET', '/admin/albums');
     renderAlbums(albums);
   } catch (e) {
     el.innerHTML = `<span style="color:var(--text-muted);font-size:0.875rem">Erreur : ${esc(e.message)}</span>`;
@@ -503,9 +472,9 @@ function renderAlbums(albums) {
 
 async function setDefault(index) {
   try {
-    const albums = await fetchAlbums();
+    const albums = await api('GET', '/admin/albums');
     albums.forEach((a, i) => { a.default = (i === index); });
-    await pushAlbums(albums, `admin: set default album "${albums[index].name}"`);
+    await api('POST', '/admin/albums', albums);
     toast('Album par défaut mis à jour', 'success');
     await loadAlbums();
   } catch (e) {
@@ -514,13 +483,12 @@ async function setDefault(index) {
 }
 
 async function deleteAlbum(index) {
-  const albums = await fetchAlbums().catch(() => null);
-  if (!albums) { toast('Impossible de lire les albums', 'error'); return; }
-  const name = albums[index]?.name || '';
-  if (!confirm(`Supprimer l'album "${name}" ?`)) return;
   try {
+    const albums = await api('GET', '/admin/albums');
+    const name = albums[index]?.name || '';
+    if (!confirm(`Supprimer l'album "${name}" ?`)) return;
     albums.splice(index, 1);
-    await pushAlbums(albums, `admin: remove album "${name}"`);
+    await api('POST', '/admin/albums', albums);
     toast('Album supprimé', 'success');
     await loadAlbums();
   } catch (e) {
@@ -533,9 +501,9 @@ async function addAlbum() {
   const token = document.getElementById('new-token').value.trim();
   if (!name || !token) { toast('Nom et token requis', 'error'); return; }
   try {
-    const albums = await fetchAlbums();
+    const albums = await api('GET', '/admin/albums');
     albums.push({ id: token, name });
-    await pushAlbums(albums, `admin: add album "${name}"`);
+    await api('POST', '/admin/albums', albums);
     document.getElementById('new-name').value  = '';
     document.getElementById('new-token').value = '';
     toggleAddForm(false);
@@ -554,7 +522,6 @@ function toggleAddForm(force) {
 }
 
 /* ── Init ─────────────────────────────────────────────── */
-if (getPat()) document.getElementById('pat-status').textContent = '✓ Token configuré';
 loadCommitRef();
 loadDeployInfo();
 loadAlbums();

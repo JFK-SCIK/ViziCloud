@@ -1,0 +1,5 @@
+server/data/
+server/venv/
+__pycache__/
+*.pyc
+version.json
