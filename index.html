@@ -459,14 +459,29 @@
       const buildUrl = (key) => {
         if (!key) return null;
         const checksum = derivs[key]?.checksum;
-        const loc = items[checksum];          // items est indexé par checksum, pas par guid
+        const loc = items[checksum];
         if (!checksum || !loc) return null;
-        return `https://${loc.url_location}${loc.url_path}`;  // url_path contient déjà les params auth
+        return `https://${loc.url_location}${loc.url_path}`;
       };
 
+      const isImage = (url) => url && !/\.(mp4|mov|m4v)/i.test(url.split('?')[0]);
+
+      // Trier les dérivées par taille croissante
+      const keys = Object.keys(derivs)
+        .filter(k => derivs[k]?.checksum)
+        .sort((a, b) =>
+          (derivs[a].width||0) * (derivs[a].height||0) -
+          (derivs[b].width||0) * (derivs[b].height||0)
+        );
+
+      // Thumbnail : plus petite dérivée qui est une image (pas .mp4)
+      const thumbKey = keys.find(k => isImage(buildUrl(k))) ?? keys[0];
+      // Full : plus grande dérivée (image ou vidéo)
+      const fullKey  = keys[keys.length - 1];
+
       urlCache[guid] = {
-        thumb: buildUrl(pickDerivKey(derivs, false)),
-        full:  buildUrl(pickDerivKey(derivs, true)),
+        thumb: buildUrl(thumbKey),
+        full:  buildUrl(fullKey),
       };
     }
   }
