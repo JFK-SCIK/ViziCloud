@@ -459,9 +459,9 @@
       const buildUrl = (key) => {
         if (!key) return null;
         const checksum = derivs[key]?.checksum;
-        const loc = items[guid]?.[checksum];
+        const loc = items[checksum];          // items est indexé par checksum, pas par guid
         if (!checksum || !loc) return null;
-        return `https://${loc.url_location}${loc.url_path}?fingerprint=${checksum}`;
+        return `https://${loc.url_location}${loc.url_path}`;  // url_path contient déjà les params auth
       };
 
       urlCache[guid] = {
