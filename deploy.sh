@@ -5,6 +5,7 @@ set -e
 
 cd ~/ViziCloud
 git pull origin main
+echo "{\"commit\":\"$(git rev-parse --short HEAD)\"}" > version.json
 source server/venv/bin/activate 2>/dev/null || true
 pip install -q -r server/requirements.txt
 sudo systemctl restart vizicloud
