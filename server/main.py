@@ -5,15 +5,13 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
-TOKEN        = "B0SJtdOXmeCgIG"
-ICLOUD_BASE  = f"https://p123-sharedstreams.icloud.com/{TOKEN}/sharedstreams/"
-STATIC_DIR   = os.path.join(os.path.dirname(__file__), "..")
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "..")
 
 
-@app.post("/api/{endpoint}")
-async def proxy_icloud(endpoint: str, request: Request):
+@app.post("/api/{token}/{endpoint}")
+async def proxy_icloud(token: str, endpoint: str, request: Request):
     body = await request.body()
-    base = ICLOUD_BASE
+    base = f"https://p123-sharedstreams.icloud.com/{token}/sharedstreams/"
 
     async with httpx.AsyncClient(follow_redirects=False, timeout=20.0) as client:
         headers = {"Content-Type": "application/json"}
@@ -25,7 +23,7 @@ async def proxy_icloud(endpoint: str, request: Request):
                 data = res.json()
                 new_host = data.get("X-Apple-MMe-Host")
                 if new_host:
-                    base = f"https://{new_host}/{TOKEN}/sharedstreams/"
+                    base = f"https://{new_host}/{token}/sharedstreams/"
                     res = await client.post(base + endpoint, content=body, headers=headers)
             except Exception:
                 pass

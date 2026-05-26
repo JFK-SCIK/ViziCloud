@@ -72,6 +72,18 @@
       white-space: nowrap;
     }
 
+    .album-select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 0.25rem 0.6rem;
+      outline: none;
+      cursor: pointer;
+    }
+
     .commit-ref {
       font-size: 0.6rem;
       font-weight: 400;
@@ -322,6 +334,68 @@
       pointer-events: none;
     }
     .toast.show { opacity: 1; pointer-events: auto; }
+
+    /* ── ICON BUTTON ── */
+    .icon-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .icon-btn:hover { background: var(--surface2); color: var(--text); }
+    .icon-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ── SETTINGS ── */
+    .settings-overlay {
+      position: fixed; inset: 0; z-index: 400;
+      background: rgba(0,0,0,0.55);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s;
+    }
+    .settings-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .settings-panel {
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 401;
+      width: min(320px, 90vw);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      overflow: hidden;
+    }
+    .settings-panel.open { transform: translateX(0); }
+
+    .settings-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1rem 1rem 1.25rem;
+      padding-top: calc(1rem + env(safe-area-inset-top));
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .settings-header h2 { font-size: 1.0625rem; font-weight: 700; color: var(--text); }
+
+    .settings-body { flex: 1; overflow-y: auto; padding: 1rem 1.25rem; }
+    .settings-section { margin-bottom: 1.75rem; }
+    .settings-section h3 {
+      font-size: 0.6875rem; font-weight: 600;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.09em;
+      margin-bottom: 0.625rem;
+    }
+    .settings-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+    .settings-row:last-child { border-bottom: none; }
+    .settings-muted { font-size: 0.8125rem; color: var(--text-muted); font-family: 'Courier New', monospace; }
   </style>
 </head>
 <body>
@@ -331,7 +405,11 @@
     <img src="icons/icon.svg" alt="" aria-hidden="true" style="width:28px;height:28px;vertical-align:middle;margin-right:0.4rem;border-radius:6px;">ViziCloud
     <span id="commit-ref" class="commit-ref"></span>
   </span>
+  <select id="album-select" class="album-select" style="display:none" aria-label="Choisir un album"></select>
   <span class="badge" id="count-badge">Chargement…</span>
+  <button class="icon-btn" id="settings-btn" title="Paramètres" aria-label="Ouvrir les paramètres">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
 </header>
 
 <div class="status-bar" id="status-bar">
@@ -341,7 +419,7 @@
 
 <main>
   <div class="gallery" id="gallery"></div>
-  <div class="pagination" id="pagination" style="display:none"></div>
+  <div id="scroll-sentinel"></div>
 </main>
 
 <!-- Lightbox -->
@@ -380,41 +458,62 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- Settings panel -->
+<div class="settings-overlay" id="settings-overlay"></div>
+<aside class="settings-panel" id="settings-panel" aria-label="Paramètres">
+  <div class="settings-header">
+    <h2>Paramètres</h2>
+    <button class="lb-btn" id="settings-close" aria-label="Fermer les paramètres">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="settings-body">
+    <section class="settings-section">
+      <h3>À propos</h3>
+      <div class="settings-row">
+        <span>Commit</span>
+        <span class="settings-muted" id="settings-commit">—</span>
+      </div>
+    </section>
+  </div>
+</aside>
+
 <script>
   'use strict';
 
   /* ── Config ───────────────────────────────────────────── */
-  const TOKEN     = 'B0SJtdOXmeCgIG';
   const PAGE_SIZE = 30;
-  // Sur le serveur (vizicloud.duckdns.org) → proxy local, sinon appel direct iCloud
   const USE_PROXY = !window.location.hostname.endsWith('github.io');
-  let   apiBase   = USE_PROXY
-    ? '/api/'
-    : `https://p123-sharedstreams.icloud.com/${TOKEN}/sharedstreams/`;
+  let TOKEN   = '';
+  let apiBase = '';
 
   /* ── State ────────────────────────────────────────────── */
-  let allPhotos        = [];
-  let urlCache         = {};   // guid → { thumb, full }
-  let currentPage      = 0;
-  let lbIndex          = -1;
-  let touchStartX      = 0;
-  let lbPushedHistory  = false;
+  let allPhotos             = [];
+  let urlCache              = {};   // guid → { thumb, full, isVideo }
+  let loadedCount           = 0;
+  let isLoadingBatch        = false;
+  let lbIndex               = -1;
+  let touchStartX           = 0;
+  let touchIsZoom           = false;
+  let lbPushedHistory       = false;
+  let settingsPushedHistory = false;
 
   /* ── DOM ──────────────────────────────────────────────── */
-  const $gallery    = document.getElementById('gallery');
-  const $pagination = document.getElementById('pagination');
-  const $countBadge = document.getElementById('count-badge');
-  const $statusBar  = document.getElementById('status-bar');
-  const $statusText = document.getElementById('status-text');
-  const $lightbox   = document.getElementById('lightbox');
-  const $lbImg      = document.getElementById('lb-img');
-  const $lbVideo    = document.getElementById('lb-video');
-  const $lbCounter  = document.getElementById('lb-counter');
-  const $lbCaption  = document.getElementById('lb-caption');
-  const $lbDate     = document.getElementById('lb-date');
-  const $lbPrev     = document.getElementById('lb-prev');
-  const $lbNext     = document.getElementById('lb-next');
-  const $toast      = document.getElementById('toast');
+  const $gallery         = document.getElementById('gallery');
+  const $countBadge      = document.getElementById('count-badge');
+  const $statusBar       = document.getElementById('status-bar');
+  const $statusText      = document.getElementById('status-text');
+  const $lightbox        = document.getElementById('lightbox');
+  const $lbImg           = document.getElementById('lb-img');
+  const $lbVideo         = document.getElementById('lb-video');
+  const $lbCounter       = document.getElementById('lb-counter');
+  const $lbCaption       = document.getElementById('lb-caption');
+  const $lbDate          = document.getElementById('lb-date');
+  const $lbPrev          = document.getElementById('lb-prev');
+  const $lbNext          = document.getElementById('lb-next');
+  const $toast           = document.getElementById('toast');
+  const $settingsPanel   = document.getElementById('settings-panel');
+  const $settingsOverlay = document.getElementById('settings-overlay');
 
   /* ── Helpers ──────────────────────────────────────────── */
   let toastTimer;
@@ -518,12 +617,43 @@
     }
   }
 
+  /* ── Album config ─────────────────────────────────────── */
+  async function loadAlbumConfig() {
+    const albums = await fetch('./albums.json').then(r => r.json())
+      .catch(() => [{ id: 'B0SJtdOXmeCgIG', name: 'Famille 2024', default: true }]);
+
+    const saved   = localStorage.getItem('vc_album');
+    const album   = albums.find(a => a.id === saved) || albums.find(a => a.default) || albums[0];
+    TOKEN   = album.id;
+    apiBase = USE_PROXY
+      ? `/api/${TOKEN}/`
+      : `https://p123-sharedstreams.icloud.com/${TOKEN}/sharedstreams/`;
+
+    if (albums.length > 1) {
+      const sel = document.getElementById('album-select');
+      sel.style.display = '';
+      sel.innerHTML = albums.map(a =>
+        `<option value="${a.id}" ${a.id === TOKEN ? 'selected' : ''}>${a.name}</option>`
+      ).join('');
+      sel.addEventListener('change', () => {
+        localStorage.setItem('vc_album', sel.value);
+        location.reload();
+      });
+    }
+  }
+
   /* ── Load all photos ──────────────────────────────────── */
   async function init() {
     fetch('./version.json').then(r => r.json()).then(data => {
-      const el = document.getElementById('commit-ref');
-      if (el && data.commit) el.textContent = data.commit;
+      if (data.commit) {
+        const el = document.getElementById('commit-ref');
+        if (el) el.textContent = data.commit;
+        const sc = document.getElementById('settings-commit');
+        if (sc) sc.textContent = data.commit;
+      }
     }).catch(() => {});
+
+    await loadAlbumConfig();
 
     setLoading(true, "Connexion à iCloud…");
     try {
@@ -536,7 +666,10 @@
         setLoading(false);
         return;
       }
-      await renderPage(0);
+      $gallery.innerHTML = '';
+      loadedCount = 0;
+      await appendBatch();
+      setupScrollObserver();
     } catch (e) {
       setLoading(false);
       $countBadge.textContent = 'Erreur';
@@ -545,69 +678,59 @@
     }
   }
 
-  /* ── Render gallery page ──────────────────────────────── */
-  async function renderPage(page) {
-    currentPage = page;
-    const start = page * PAGE_SIZE;
+  /* ── Gallery event delegation ─────────────────────────── */
+  $gallery.addEventListener('click', e => {
+    const card = e.target.closest('.photo-card[data-index]');
+    if (card) openLightbox(+card.dataset.index);
+  });
+  $gallery.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest('.photo-card[data-index]');
+    if (card) { e.preventDefault(); openLightbox(+card.dataset.index); }
+  });
+
+  /* ── Infinite scroll ──────────────────────────────────── */
+  async function appendBatch() {
+    if (isLoadingBatch || loadedCount >= allPhotos.length) return;
+    isLoadingBatch = true;
+    const start = loadedCount;
     const end   = Math.min(start + PAGE_SIZE, allPhotos.length);
     const slice = allPhotos.slice(start, end);
 
-    // Skeletons
-    $gallery.innerHTML = slice.map(() => '<div class="photo-card skeleton"></div>').join('');
-    $pagination.style.display = 'none';
-
-    setLoading(true, `Photos ${start + 1}–${end} sur ${allPhotos.length}…`);
+    $gallery.insertAdjacentHTML('beforeend',
+      slice.map(() => '<div class="photo-card skeleton"></div>').join('')
+    );
+    setLoading(true, `Chargement ${end} / ${allPhotos.length}…`);
     try {
       await ensureUrls(slice.map(p => p.photoGuid));
-      renderGrid(slice, start);
-      renderPagination();
+      $gallery.querySelectorAll('.photo-card.skeleton').forEach(s => s.remove());
+      $gallery.insertAdjacentHTML('beforeend', slice.map((photo, i) => {
+        const urls  = urlCache[photo.photoGuid] || {};
+        const isVid = photo.mediaAssetType === 'video';
+        const idx   = start + i;
+        const alt   = photo.caption || `Photo ${idx + 1}`;
+        return `<div class="photo-card" data-index="${idx}" role="button" tabindex="0" aria-label="${alt.replace(/"/g,'&quot;')}">
+          ${urls.thumb ? `<img src="${urls.thumb}" alt="" loading="lazy" decoding="async">` : ''}
+          ${isVid ? `<span class="video-badge" aria-label="Vidéo"><svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>` : ''}
+        </div>`;
+      }).join(''));
+      loadedCount = end;
     } catch (e) {
+      $gallery.querySelectorAll('.photo-card.skeleton').forEach(s => s.remove());
       showToast(`Erreur de chargement : ${e.message}`);
     } finally {
+      isLoadingBatch = false;
       setLoading(false);
     }
   }
 
-  function renderGrid(photos, startIndex) {
-    $gallery.innerHTML = photos.map((photo, i) => {
-      const urls   = urlCache[photo.photoGuid] || {};
-      const isVid  = photo.mediaAssetType === 'video';
-      const gIndex = startIndex + i;
-      const alt    = photo.caption || `Photo ${gIndex + 1}`;
-      return `
-        <div class="photo-card" data-index="${gIndex}" role="button" tabindex="0" aria-label="${alt.replace(/"/g, '&quot;')}">
-          ${urls.thumb ? `<img src="${urls.thumb}" alt="" loading="lazy" decoding="async">` : ''}
-          ${isVid ? `<span class="video-badge" aria-label="Vidéo">
-            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </span>` : ''}
-        </div>`;
-    }).join('');
-
-    $gallery.querySelectorAll('.photo-card').forEach(card => {
-      const openIt = () => openLightbox(+card.dataset.index);
-      card.addEventListener('click', openIt);
-      card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } });
-    });
-  }
-
-  /* ── Pagination ───────────────────────────────────────── */
-  function renderPagination() {
-    const total = Math.ceil(allPhotos.length / PAGE_SIZE);
-    if (total <= 1) return;
-    $pagination.style.display = 'flex';
-    $pagination.innerHTML = `
-      <button class="btn" id="btn-prev" ${currentPage === 0 ? 'disabled' : ''}>← Précédente</button>
-      <span class="page-info">Page ${currentPage + 1} / ${total}</span>
-      <button class="btn" id="btn-next" ${currentPage >= total - 1 ? 'disabled' : ''}>Suivante →</button>`;
-
-    document.getElementById('btn-prev')?.addEventListener('click', () => {
-      renderPage(currentPage - 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-    document.getElementById('btn-next')?.addEventListener('click', () => {
-      renderPage(currentPage + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+  function setupScrollObserver() {
+    const sentinel = document.getElementById('scroll-sentinel');
+    if (!sentinel) return;
+    new IntersectionObserver(
+      entries => { if (entries[0].isIntersecting) appendBatch(); },
+      { rootMargin: '300px' }
+    ).observe(sentinel);
   }
 
   /* ── Lightbox ─────────────────────────────────────────── */
@@ -695,6 +818,31 @@
     }
   }
 
+  /* ── Settings ─────────────────────────────────────────── */
+  function openSettings() {
+    $settingsPanel.classList.add('open');
+    $settingsOverlay.classList.add('open');
+    history.pushState({ panel: 'settings' }, '');
+    settingsPushedHistory = true;
+  }
+
+  function _closeSettingsUI() {
+    $settingsPanel.classList.remove('open');
+    $settingsOverlay.classList.remove('open');
+  }
+
+  function closeSettings() {
+    _closeSettingsUI();
+    if (settingsPushedHistory) {
+      settingsPushedHistory = false;
+      history.back();
+    }
+  }
+
+  document.getElementById('settings-btn').addEventListener('click', openSettings);
+  document.getElementById('settings-close').addEventListener('click', closeSettings);
+  $settingsOverlay.addEventListener('click', closeSettings);
+
   /* ── Lightbox events ──────────────────────────────────── */
   document.getElementById('lb-close').addEventListener('click', closeLightbox);
   document.getElementById('lb-back').addEventListener('click', closeLightbox);
@@ -710,6 +858,9 @@
       $lightbox.classList.remove('open');
       document.body.style.overflow = '';
       lbIndex = -1;
+    } else if ($settingsPanel.classList.contains('open')) {
+      settingsPushedHistory = false;
+      _closeSettingsUI();
     }
   });
 
@@ -717,17 +868,24 @@
   $lbNext.addEventListener('click', () => { if (lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1); });
 
   document.addEventListener('keydown', e => {
+    if ($settingsPanel.classList.contains('open') && e.key === 'Escape') { closeSettings(); return; }
     if (!$lightbox.classList.contains('open')) return;
     if (e.key === 'Escape')      closeLightbox();
-    if (e.key === 'ArrowLeft'  && lbIndex > 0)                  loadLbPhoto(lbIndex - 1);
+    if (e.key === 'ArrowLeft'  && lbIndex > 0)                    loadLbPhoto(lbIndex - 1);
     if (e.key === 'ArrowRight' && lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1);
   });
 
-  // Swipe tactile
+  // Swipe tactile — inhibé si zoom actif
   $lightbox.addEventListener('touchstart', e => {
-    touchStartX = e.changedTouches[0].clientX;
+    touchIsZoom = e.touches.length > 1;
+    if (!touchIsZoom) touchStartX = e.changedTouches[0].clientX;
+  }, { passive: true });
+  $lightbox.addEventListener('touchmove', e => {
+    if (e.touches.length > 1) touchIsZoom = true;
   }, { passive: true });
   $lightbox.addEventListener('touchend', e => {
+    if (touchIsZoom) { touchIsZoom = false; return; }
+    if ((window.visualViewport?.scale ?? 1) > 1.05) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
     if (Math.abs(dx) < 50) return;
     if (dx < 0 && lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1);
