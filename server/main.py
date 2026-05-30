@@ -84,7 +84,7 @@ async def serve_albums():
 async def admin_page(pwd: str = ''):
     if ADMIN_PWD and pwd != ADMIN_PWD:
         raise HTTPException(status_code=403, detail='Mot de passe incorrect')
-    return HTMLResponse((Path(__file__).parent / 'admin.html').read_text(encoding='utf-8'))
+    return HTMLResponse((REPO_DIR / 'admin.html').read_text(encoding='utf-8'))
 
 
 # ── Admin : infos git ─────────────────────────────────────────────────────────
