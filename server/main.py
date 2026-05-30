@@ -71,6 +71,20 @@ async def proxy_icloud(token: str, endpoint: str, request: Request):
     return Response(content=res.content, status_code=res.status_code, media_type='application/json')
 
 
+# ── Version (git SHA courant) ─────────────────────────────────────────────────
+
+@app.get('/version.json')
+async def get_version():
+    try:
+        sha = subprocess.check_output(
+            ['git', '-C', str(REPO_DIR), 'rev-parse', '--short', 'HEAD'],
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+        return {'commit': sha}
+    except Exception:
+        return {'commit': '?'}
+
+
 # ── Albums (public — lu par index.html) ──────────────────────────────────────
 
 @app.get('/albums.json')

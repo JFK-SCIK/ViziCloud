@@ -316,6 +316,39 @@
     }
     .empty-state h2 { font-size: 1.25rem; color: var(--text); margin-bottom: 0.5rem; }
 
+    /* ── UPDATE BANNER ── */
+    .update-banner {
+      position: fixed;
+      bottom: 0;
+      left: 0; right: 0;
+      z-index: 900;
+      background: var(--accent);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.875rem 1.25rem;
+      padding-bottom: calc(0.875rem + env(safe-area-inset-bottom));
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      font-size: 0.9375rem;
+      font-weight: 500;
+    }
+    .update-banner.visible { transform: translateY(0); }
+    .update-banner .btn-update {
+      background: #fff;
+      color: var(--accent);
+      border: none;
+      border-radius: 8px;
+      padding: 0.4rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
     .toast {
       position: fixed;
       bottom: 1.5rem;
@@ -477,6 +510,11 @@
     <p class="lb-caption" id="lb-caption"></p>
     <p class="lb-date" id="lb-date"></p>
   </div>
+</div>
+
+<div class="update-banner" id="update-banner">
+  <span>Nouvelle version disponible</span>
+  <button class="btn-update" onclick="doUpdate()">Mettre à jour</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -672,16 +710,47 @@
     }
   }
 
-  /* ── Load all photos ──────────────────────────────────── */
-  async function init() {
-    fetch('./version.json').then(r => r.json()).then(data => {
-      if (data.commit) {
+  /* ── Version polling ──────────────────────────────────── */
+  let loadedCommit = null;
+
+  async function checkVersion() {
+    try {
+      const data = await fetch('./version.json', { cache: 'no-store' }).then(r => r.json());
+      if (!data?.commit || data.commit === '?') return;
+      if (!loadedCommit) {
+        loadedCommit = data.commit;
         const el = document.getElementById('commit-ref');
         if (el) el.textContent = data.commit;
         const sc = document.getElementById('settings-commit');
         if (sc) sc.textContent = data.commit;
+        return;
       }
-    }).catch(() => {});
+      if (data.commit !== loadedCommit) showUpdateBanner();
+    } catch (_) {}
+  }
+
+  function showUpdateBanner() {
+    document.getElementById('update-banner').classList.add('visible');
+  }
+
+  async function doUpdate() {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations().catch(() => []);
+      await Promise.all(regs.map(r => r.unregister()));
+      const keys = await caches.keys().catch(() => []);
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+    location.reload(true);
+  }
+
+  setInterval(checkVersion, 5 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkVersion();
+  });
+
+  /* ── Load all photos ──────────────────────────────────── */
+  async function init() {
+    checkVersion();
 
     await loadAlbumConfig();
 
