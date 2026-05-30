@@ -659,6 +659,10 @@
     try {
       const stream = await icloudPost('webstream', { streamCtag: null });
       allPhotos = (stream.photos || []).sort((a, b) => (b.dateCreated || 0) - (a.dateCreated || 0));
+      if (stream.streamName) {
+        const opt = document.querySelector(`#album-select option[value="${CSS.escape(TOKEN)}"]`);
+        if (opt) opt.textContent = stream.streamName;
+      }
       const n = allPhotos.length;
       $countBadge.textContent = `${n} photo${n > 1 ? 's' : ''}`;
       if (n === 0) {

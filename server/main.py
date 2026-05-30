@@ -32,7 +32,7 @@ def _read_albums():
         albums = json.loads(repo_file.read_text(encoding='utf-8'))
         data_file.write_text(json.dumps(albums, indent=2, ensure_ascii=False), encoding='utf-8')
         return albums
-    return [{'id': 'B0SJtdOXmeCgIG', 'name': 'Famille 2024', 'default': True}]
+    return [{'id': 'B0SJtdOXmeCgIG', 'default': True}]
 
 
 def _save_albums(albums):

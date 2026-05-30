@@ -318,15 +318,12 @@
     <div class="add-form" id="add-form">
       <div class="add-form-row">
         <div class="field">
-          <label for="new-name">Nom</label>
-          <input type="text" id="new-name" placeholder="Ex : Vacances 2025">
-        </div>
-        <div class="field">
           <label for="new-token">Token iCloud</label>
-          <input type="text" id="new-token" placeholder="Ex : B0SJtdOXmeCgIG">
+          <input type="text" id="new-token" placeholder="Ex : B0SJtdOXmeCgIG" oninput="onTokenInput()">
         </div>
         <button class="btn btn-primary" onclick="addAlbum()">Ajouter</button>
       </div>
+      <div id="token-preview" style="font-size:0.8125rem;color:var(--text-muted);margin-top:0.5rem;min-height:1.2em"></div>
     </div>
   </div>
 
@@ -462,12 +459,26 @@ function renderAlbums(albums) {
   el.innerHTML = albums.map((a, i) => `
     <div class="album-item">
       <div class="album-info">
-        <div class="album-name">${esc(a.name)} ${a.default ? '<span class="default-badge">défaut</span>' : ''}</div>
+        <div class="album-name" id="aname-${i}"><span class="spin"></span> ${a.default ? '<span class="default-badge">défaut</span>' : ''}</div>
         <div class="album-token">${esc(a.id)}</div>
       </div>
       <button class="btn btn-sm" onclick="setDefault(${i})" ${a.default ? 'disabled' : ''}>Défaut</button>
       <button class="btn btn-sm btn-danger" onclick="deleteAlbum(${i})">Supprimer</button>
     </div>`).join('');
+
+  albums.forEach((a, i) => {
+    fetch(`/api/${encodeURIComponent(a.id)}/webstream`, {
+      method: 'POST', body: JSON.stringify({ streamCtag: null }),
+    }).then(r => r.json()).then(data => {
+      const el = document.getElementById(`aname-${i}`);
+      if (!el) return;
+      const defaultBadge = a.default ? ' <span class="default-badge">défaut</span>' : '';
+      el.innerHTML = esc(data.streamName || a.id) + defaultBadge;
+    }).catch(() => {
+      const el = document.getElementById(`aname-${i}`);
+      if (el) el.innerHTML = esc(a.id) + (a.default ? ' <span class="default-badge">défaut</span>' : '');
+    });
+  });
 }
 
 async function setDefault(index) {
@@ -496,16 +507,42 @@ async function deleteAlbum(index) {
   }
 }
 
-async function addAlbum() {
-  const name  = document.getElementById('new-name').value.trim();
+let tokenTimer;
+function onTokenInput() {
+  clearTimeout(tokenTimer);
   const token = document.getElementById('new-token').value.trim();
-  if (!name || !token) { toast('Nom et token requis', 'error'); return; }
+  document.getElementById('token-preview').textContent = '';
+  if (token.length < 8) return;
+  tokenTimer = setTimeout(() => fetchTokenPreview(token), 600);
+}
+
+async function fetchTokenPreview(token) {
+  const preview = document.getElementById('token-preview');
+  preview.innerHTML = '<span class="spin"></span> Vérification…';
+  try {
+    const res = await fetch(`/api/${encodeURIComponent(token)}/webstream`, {
+      method: 'POST', body: JSON.stringify({ streamCtag: null }),
+    });
+    const data = await res.json();
+    if (data.streamName) {
+      preview.textContent = `✓ "${data.streamName}" — ${(data.photos || []).length} photo(s)`;
+    } else {
+      preview.textContent = 'Album trouvé (nom non disponible)';
+    }
+  } catch (_) {
+    preview.textContent = 'Token invalide ou inaccessible';
+  }
+}
+
+async function addAlbum() {
+  const token = document.getElementById('new-token').value.trim();
+  if (!token) { toast('Token requis', 'error'); return; }
   try {
     const albums = await api('GET', '/admin/albums');
-    albums.push({ id: token, name });
+    albums.push({ id: token });
     await api('POST', '/admin/albums', albums);
-    document.getElementById('new-name').value  = '';
-    document.getElementById('new-token').value = '';
+    document.getElementById('new-token').value  = '';
+    document.getElementById('token-preview').textContent = '';
     toggleAddForm(false);
     toast('Album ajouté !', 'success');
     await loadAlbums();
