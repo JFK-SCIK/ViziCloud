@@ -407,46 +407,46 @@
 
     .settings-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 1rem 1rem 1rem 1.25rem;
-      padding-top: calc(1rem + env(safe-area-inset-top));
+      padding: 0.75rem 0.75rem 0.75rem 1rem;
+      padding-top: calc(0.75rem + env(safe-area-inset-top));
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .settings-header h2 { font-size: 1.0625rem; font-weight: 700; color: var(--text); }
+    .settings-header h2 { font-size: 1rem; font-weight: 700; color: var(--text); }
 
-    .settings-body { flex: 1; overflow-y: auto; padding: 1rem 1.25rem; }
-    .settings-section { margin-bottom: 1.75rem; }
+    .settings-body { flex: 1; overflow-y: auto; padding: 0.75rem 1rem; }
+    .settings-section { margin-bottom: 1.25rem; }
     .settings-section h3 {
-      font-size: 0.6875rem; font-weight: 600;
+      font-size: 0.65rem; font-weight: 600;
       color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.09em;
-      margin-bottom: 0.625rem;
+      margin-bottom: 0.5rem;
     }
     .settings-row {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0.625rem 0;
+      padding: 0.4rem 0;
       border-bottom: 1px solid var(--border);
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
     }
     .settings-row:last-child { border-bottom: none; }
-    .settings-muted { font-size: 0.8125rem; color: var(--text-muted); font-family: 'Courier New', monospace; }
+    .settings-muted { font-size: 0.75rem; color: var(--text-muted); font-family: 'Courier New', monospace; }
 
-    .filter-group { margin-bottom: 1rem; }
-    .filter-group-label { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.4rem; }
-    .filter-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .filter-group { margin-bottom: 0.75rem; }
+    .filter-group-label { font-size: 0.65rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.3rem; }
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
     .filter-chip {
-      display: inline-flex; align-items: center; gap: 0.3rem;
-      padding: 0.3rem 0.7rem;
+      display: inline-flex; align-items: center; gap: 0.25rem;
+      padding: 0.2rem 0.55rem;
       border-radius: 999px;
       border: 1px solid var(--border);
       background: var(--surface2);
       color: var(--text-muted);
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       cursor: pointer;
       transition: background 0.15s, color 0.15s, border-color 0.15s;
       -webkit-tap-highlight-color: transparent;
     }
     .filter-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
-    .filter-chip-count { opacity: 0.65; font-size: 0.7rem; }
+    .filter-chip-count { opacity: 0.6; font-size: 0.68rem; }
     .filter-active-dot {
       display: none; width: 8px; height: 8px; border-radius: 50%;
       background: var(--accent); position: absolute; top: 6px; right: 6px;
@@ -882,14 +882,14 @@
         const label = new Date(+y, +m-1, 1).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
         return [label, count, key]; // label affiché, compte, clé de tri
       });
-    if (monthItems.length > 1) {
+    if (monthItems.length >= 1) {
       anyVisible = true;
       document.getElementById('year-group').style.display = '';
       const $el = document.getElementById('year-chips');
       $el.innerHTML = monthItems.map(([label, count, key]) =>
         `<button class="filter-chip" data-val="${key}">${label} <span class="filter-chip-count">${count}</span></button>`
       ).join('');
-      attachChips($el, activeYears);
+      if (monthItems.length > 1) attachChips($el, activeYears);
     }
 
     if (!anyVisible) return;
