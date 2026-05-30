@@ -9,12 +9,6 @@ PORT=8002
 
 echo "=== ViziCloud — setup ==="
 
-if [ -z "$VIZICLOUD_ADMIN_PWD" ]; then
-    echo "ERREUR : définir VIZICLOUD_ADMIN_PWD avant de lancer ce script."
-    echo "  VIZICLOUD_ADMIN_PWD=mon_mdp bash server/setup.sh"
-    exit 1
-fi
-
 # 1. Cloner ou mettre à jour le repo
 if [ -d "$REPO_DIR/.git" ]; then
     echo "[1/6] Mise à jour du repo..."
@@ -49,7 +43,7 @@ WorkingDirectory=$REPO_DIR/server
 ExecStart=$REPO_DIR/server/venv/bin/uvicorn main:app --host 127.0.0.1 --port $PORT
 Restart=always
 RestartSec=5
-Environment=VIZICLOUD_ADMIN_PWD=${VIZICLOUD_ADMIN_PWD}
+Environment=VIZICLOUD_ADMIN_PWD=${VIZICLOUD_ADMIN_PWD:-}
 Environment=VIZICLOUD_BRANCH=main
 Environment=VIZICLOUD_SERVICE=${SERVICE}
 
@@ -80,7 +74,7 @@ fi
 echo ""
 echo "=== Setup terminé ! ==="
 echo ""
-echo "Page admin : http://localhost:${PORT}/admin?pwd=<votre_mot_de_passe>"
+echo "Page admin : http://vizicloud.duckdns.org:${PORT}/admin"
 echo ""
 echo "Ajoutez ce bloc dans /etc/caddy/Caddyfile :"
 echo "──────────────────────────────────────────────"
