@@ -538,12 +538,8 @@
         <div class="filter-chips" id="contrib-chips"></div>
       </div>
       <div class="filter-group" id="year-group" style="display:none">
-        <p class="filter-group-label">Année</p>
+        <p class="filter-group-label">Période</p>
         <div class="filter-chips" id="year-chips"></div>
-      </div>
-      <div class="filter-group" id="device-group" style="display:none">
-        <p class="filter-group-label">Appareil</p>
-        <div class="filter-chips" id="device-chips"></div>
       </div>
       <button class="btn" id="filter-clear" style="margin-top:0.25rem;width:100%;justify-content:center" disabled>Tout afficher</button>
     </section>
@@ -810,19 +806,18 @@
   });
 
   /* ── Filter ───────────────────────────────────────────── */
+  function photoMonthKey(p) {
+    if (!p.dateCreated) return '';
+    const d = new Date(p.dateCreated * 1000);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+
   function applyFilter() {
-    const hasFilter = activeContributors.size || activeYears.size || activeDevices.size;
+    const hasFilter = activeContributors.size || activeYears.size;
     filteredPhotos = hasFilter
       ? allPhotos.filter(p => {
           if (activeContributors.size && !activeContributors.has(p.contributorFullName || '—')) return false;
-          if (activeYears.size) {
-            const y = p.dateCreated ? String(new Date(p.dateCreated * 1000).getFullYear()) : '';
-            if (!activeYears.has(y)) return false;
-          }
-          if (activeDevices.size) {
-            const dev = p.deviceModel || p.cameraModel || '';
-            if (!activeDevices.has(dev)) return false;
-          }
+          if (activeYears.size && !activeYears.has(photoMonthKey(p))) return false;
           return true;
         })
       : allPhotos;
@@ -874,26 +869,33 @@
       Object.entries(cCounts).sort((a,b) => a[0].localeCompare(b[0])),
       activeContributors);
 
-    // Années
-    const yCounts = {};
+    // Mois+Année (clé "YYYY-MM", label "jan. 2025")
+    const mCounts = {};
     allPhotos.forEach(p => {
-      if (p.dateCreated) { const y = String(new Date(p.dateCreated*1000).getFullYear()); yCounts[y]=(yCounts[y]||0)+1; }
+      const key = photoMonthKey(p);
+      if (key) mCounts[key] = (mCounts[key]||0)+1;
     });
-    buildSection('year-group', 'year-chips',
-      Object.entries(yCounts).sort((a,b) => b[0]-a[0]),
-      activeYears);
-
-    // Appareils (seulement si le champ existe dans les données)
-    const dCounts = {};
-    allPhotos.forEach(p => { const d = p.deviceModel || p.cameraModel || ''; if (d) dCounts[d]=(dCounts[d]||0)+1; });
-    buildSection('device-group', 'device-chips',
-      Object.entries(dCounts).sort((a,b) => a[0].localeCompare(b[0])),
-      activeDevices);
+    const monthItems = Object.entries(mCounts)
+      .sort((a,b) => b[0].localeCompare(a[0])) // desc chronologique
+      .map(([key, count]) => {
+        const [y, m] = key.split('-');
+        const label = new Date(+y, +m-1, 1).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' });
+        return [label, count, key]; // label affiché, compte, clé de tri
+      });
+    if (monthItems.length > 1) {
+      anyVisible = true;
+      document.getElementById('year-group').style.display = '';
+      const $el = document.getElementById('year-chips');
+      $el.innerHTML = monthItems.map(([label, count, key]) =>
+        `<button class="filter-chip" data-val="${key}">${label} <span class="filter-chip-count">${count}</span></button>`
+      ).join('');
+      attachChips($el, activeYears);
+    }
 
     if (!anyVisible) return;
     document.getElementById('filter-section').style.display = '';
     document.getElementById('filter-clear').addEventListener('click', () => {
-      activeContributors.clear(); activeYears.clear(); activeDevices.clear();
+      activeContributors.clear(); activeYears.clear();
       document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
       applyFilter();
     });
