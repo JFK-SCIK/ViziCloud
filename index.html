@@ -608,11 +608,17 @@
     if (msg) $statusText.textContent = msg;
   }
 
-  function formatDate(ts) {
-    if (!ts) return '';
-    return new Date(ts * 1000).toLocaleDateString('fr-FR', {
-      year: 'numeric', month: 'long', day: 'numeric'
-    });
+  function toDate(val) {
+    if (!val) return null;
+    // dateCreated peut être un nombre (secondes Unix) ou une chaîne ISO ("2024-01-15T...")
+    const d = typeof val === 'number' ? new Date(val * 1000) : new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function formatDate(val) {
+    const d = toDate(val);
+    if (!d) return '';
+    return d.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
   /* ── iCloud API ───────────────────────────────────────── */
@@ -768,7 +774,9 @@
     setLoading(true, "Connexion à iCloud…");
     try {
       const stream = await icloudPost('webstream', { streamCtag: null });
-      allPhotos = (stream.photos || []).sort((a, b) => (b.dateCreated || 0) - (a.dateCreated || 0));
+      allPhotos = (stream.photos || []).sort((a, b) =>
+        (toDate(b.dateCreated)?.getTime() ?? 0) - (toDate(a.dateCreated)?.getTime() ?? 0)
+      );
       if (stream.streamName) {
         const opt = document.querySelector(`#album-select option[value="${CSS.escape(TOKEN)}"]`);
         if (opt) opt.textContent = stream.streamName;
@@ -807,8 +815,8 @@
 
   /* ── Filter ───────────────────────────────────────────── */
   function photoMonthKey(p) {
-    if (!p.dateCreated) return '';
-    const d = new Date(p.dateCreated * 1000);
+    const d = toDate(p.dateCreated);
+    if (!d) return '';
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   }
 
