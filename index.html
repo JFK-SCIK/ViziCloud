@@ -396,6 +396,28 @@
     }
     .settings-row:last-child { border-bottom: none; }
     .settings-muted { font-size: 0.8125rem; color: var(--text-muted); font-family: 'Courier New', monospace; }
+
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.375rem; }
+    .filter-chip {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .filter-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .filter-chip-count { opacity: 0.65; font-size: 0.7rem; }
+    .filter-active-dot {
+      display: none; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent); position: absolute; top: 6px; right: 6px;
+    }
+    #settings-btn { position: relative; }
+    #settings-btn.filter-on .filter-active-dot { display: block; }
   </style>
 </head>
 <body>
@@ -409,6 +431,7 @@
   <span class="badge" id="count-badge">Chargement…</span>
   <button class="icon-btn" id="settings-btn" title="Paramètres" aria-label="Ouvrir les paramètres">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span class="filter-active-dot" aria-hidden="true"></span>
   </button>
 </header>
 
@@ -468,6 +491,11 @@
     </button>
   </div>
   <div class="settings-body">
+    <section class="settings-section" id="filter-section" style="display:none">
+      <h3>Filtrer par contributeur</h3>
+      <div class="filter-chips" id="filter-chips"></div>
+      <button class="btn" id="filter-clear" style="margin-top:0.75rem;width:100%;justify-content:center" disabled>Tout afficher</button>
+    </section>
     <section class="settings-section">
       <h3>À propos</h3>
       <div class="settings-row">
@@ -489,6 +517,8 @@
 
   /* ── State ────────────────────────────────────────────── */
   let allPhotos             = [];
+  let filteredPhotos        = [];
+  let activeContributors    = new Set();
   let urlCache              = {};   // guid → { thumb, full, isVideo }
   let loadedCount           = 0;
   let isLoadingBatch        = false;
@@ -670,6 +700,8 @@
         setLoading(false);
         return;
       }
+      filteredPhotos = allPhotos;
+      buildFilterUI();
       $gallery.innerHTML = '';
       loadedCount = 0;
       await appendBatch();
@@ -693,18 +725,72 @@
     if (card) { e.preventDefault(); openLightbox(+card.dataset.index); }
   });
 
+  /* ── Filter ───────────────────────────────────────────── */
+  function applyFilter() {
+    filteredPhotos = activeContributors.size === 0
+      ? allPhotos
+      : allPhotos.filter(p => activeContributors.has(p.contributorFullName || ''));
+    const n    = filteredPhotos.length;
+    const suff = activeContributors.size ? ` (filtrées)` : '';
+    $countBadge.textContent = `${n} photo${n > 1 ? 's' : ''}${suff}`;
+    document.getElementById('settings-btn').classList.toggle('filter-on', activeContributors.size > 0);
+    document.getElementById('filter-clear').disabled = activeContributors.size === 0;
+    $gallery.innerHTML = '';
+    loadedCount = 0;
+    if (n === 0) {
+      $gallery.innerHTML = '<div class="empty-state"><h2>Aucune photo</h2><p>Aucun résultat pour ce filtre.</p></div>';
+      return;
+    }
+    appendBatch();
+  }
+
+  function buildFilterUI() {
+    const counts = {};
+    allPhotos.forEach(p => {
+      const name = p.contributorFullName || '—';
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    const names = Object.keys(counts).sort();
+    if (names.length <= 1) return;
+
+    const section = document.getElementById('filter-section');
+    section.style.display = '';
+    const $chips = document.getElementById('filter-chips');
+    $chips.innerHTML = names.map(name =>
+      `<button class="filter-chip" data-name="${name.replace(/"/g,'&quot;')}">${name} <span class="filter-chip-count">${counts[name]}</span></button>`
+    ).join('');
+
+    $chips.addEventListener('click', e => {
+      const chip = e.target.closest('.filter-chip');
+      if (!chip) return;
+      const name = chip.dataset.name;
+      if (activeContributors.has(name)) activeContributors.delete(name);
+      else activeContributors.add(name);
+      $chips.querySelectorAll('.filter-chip').forEach(c =>
+        c.classList.toggle('active', activeContributors.has(c.dataset.name))
+      );
+      applyFilter();
+    });
+
+    document.getElementById('filter-clear').addEventListener('click', () => {
+      activeContributors.clear();
+      $chips.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      applyFilter();
+    });
+  }
+
   /* ── Infinite scroll ──────────────────────────────────── */
   async function appendBatch() {
-    if (isLoadingBatch || loadedCount >= allPhotos.length) return;
+    if (isLoadingBatch || loadedCount >= filteredPhotos.length) return;
     isLoadingBatch = true;
     const start = loadedCount;
-    const end   = Math.min(start + PAGE_SIZE, allPhotos.length);
-    const slice = allPhotos.slice(start, end);
+    const end   = Math.min(start + PAGE_SIZE, filteredPhotos.length);
+    const slice = filteredPhotos.slice(start, end);
 
     $gallery.insertAdjacentHTML('beforeend',
       slice.map(() => '<div class="photo-card skeleton"></div>').join('')
     );
-    setLoading(true, `Chargement ${end} / ${allPhotos.length}…`);
+    setLoading(true, `Chargement ${end} / ${filteredPhotos.length}…`);
     try {
       await ensureUrls(slice.map(p => p.photoGuid));
       $gallery.querySelectorAll('.photo-card.skeleton').forEach(s => s.remove());
@@ -763,15 +849,15 @@
   }
 
   async function loadLbPhoto(index) {
-    const photo = allPhotos[index];
+    const photo = filteredPhotos[index];
     if (!photo) return;
     lbIndex = index;
 
-    $lbCounter.textContent = `${index + 1} / ${allPhotos.length}`;
+    $lbCounter.textContent = `${index + 1} / ${filteredPhotos.length}`;
     $lbCaption.textContent = photo.caption || '';
     $lbDate.textContent    = formatDate(photo.dateCreated);
     $lbPrev.hidden = index <= 0;
-    $lbNext.hidden = index >= allPhotos.length - 1;
+    $lbNext.hidden = index >= filteredPhotos.length - 1;
 
     // Reset both media elements
     $lbVideo.pause();
@@ -869,14 +955,14 @@
   });
 
   $lbPrev.addEventListener('click', () => { if (lbIndex > 0) loadLbPhoto(lbIndex - 1); });
-  $lbNext.addEventListener('click', () => { if (lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1); });
+  $lbNext.addEventListener('click', () => { if (lbIndex < filteredPhotos.length - 1) loadLbPhoto(lbIndex + 1); });
 
   document.addEventListener('keydown', e => {
     if ($settingsPanel.classList.contains('open') && e.key === 'Escape') { closeSettings(); return; }
     if (!$lightbox.classList.contains('open')) return;
     if (e.key === 'Escape')      closeLightbox();
-    if (e.key === 'ArrowLeft'  && lbIndex > 0)                    loadLbPhoto(lbIndex - 1);
-    if (e.key === 'ArrowRight' && lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1);
+    if (e.key === 'ArrowLeft'  && lbIndex > 0)                          loadLbPhoto(lbIndex - 1);
+    if (e.key === 'ArrowRight' && lbIndex < filteredPhotos.length - 1)  loadLbPhoto(lbIndex + 1);
   });
 
   // Swipe tactile — inhibé si zoom actif
@@ -892,8 +978,8 @@
     if ((window.visualViewport?.scale ?? 1) > 1.05) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
     if (Math.abs(dx) < 50) return;
-    if (dx < 0 && lbIndex < allPhotos.length - 1) loadLbPhoto(lbIndex + 1);
-    if (dx > 0 && lbIndex > 0)                    loadLbPhoto(lbIndex - 1);
+    if (dx < 0 && lbIndex < filteredPhotos.length - 1) loadLbPhoto(lbIndex + 1);
+    if (dx > 0 && lbIndex > 0)                         loadLbPhoto(lbIndex - 1);
   }, { passive: true });
 
   /* ── Service Worker ───────────────────────────────────── */
