@@ -407,12 +407,8 @@ async function deployNow() {
     if (r.up_to_date) {
       toast('Déjà à jour — aucun déploiement nécessaire.', 'info');
     } else {
-      toast('Déploiement lancé !\n(~10 secondes)', 'success');
-      document.getElementById('btn-log').style.display = '';
-      setTimeout(async () => {
-        await loadDeployInfo();
-        await refreshLog();
-      }, 8000);
+      toast('Déploiement lancé !\n(rechargement dans 12s…)', 'success');
+      setTimeout(() => location.reload(), 12000);
     }
   } catch (e) {
     toast(`Erreur : ${e.message}`, 'error');
