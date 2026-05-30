@@ -430,7 +430,9 @@
     .settings-row:last-child { border-bottom: none; }
     .settings-muted { font-size: 0.8125rem; color: var(--text-muted); font-family: 'Courier New', monospace; }
 
-    .filter-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.375rem; }
+    .filter-group { margin-bottom: 1rem; }
+    .filter-group-label { font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.4rem; }
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
     .filter-chip {
       display: inline-flex; align-items: center; gap: 0.3rem;
       padding: 0.3rem 0.7rem;
@@ -530,9 +532,20 @@
   </div>
   <div class="settings-body">
     <section class="settings-section" id="filter-section" style="display:none">
-      <h3>Filtrer par contributeur</h3>
-      <div class="filter-chips" id="filter-chips"></div>
-      <button class="btn" id="filter-clear" style="margin-top:0.75rem;width:100%;justify-content:center" disabled>Tout afficher</button>
+      <h3>Filtres</h3>
+      <div class="filter-group" id="contrib-group" style="display:none">
+        <p class="filter-group-label">Contributeur</p>
+        <div class="filter-chips" id="contrib-chips"></div>
+      </div>
+      <div class="filter-group" id="year-group" style="display:none">
+        <p class="filter-group-label">Année</p>
+        <div class="filter-chips" id="year-chips"></div>
+      </div>
+      <div class="filter-group" id="device-group" style="display:none">
+        <p class="filter-group-label">Appareil</p>
+        <div class="filter-chips" id="device-chips"></div>
+      </div>
+      <button class="btn" id="filter-clear" style="margin-top:0.25rem;width:100%;justify-content:center" disabled>Tout afficher</button>
     </section>
     <section class="settings-section">
       <h3>À propos</h3>
@@ -557,6 +570,8 @@
   let allPhotos             = [];
   let filteredPhotos        = [];
   let activeContributors    = new Set();
+  let activeYears           = new Set();
+  let activeDevices         = new Set();
   let urlCache              = {};   // guid → { thumb, full, isVideo }
   let loadedCount           = 0;
   let isLoadingBatch        = false;
@@ -796,14 +811,25 @@
 
   /* ── Filter ───────────────────────────────────────────── */
   function applyFilter() {
-    filteredPhotos = activeContributors.size === 0
-      ? allPhotos
-      : allPhotos.filter(p => activeContributors.has(p.contributorFullName || ''));
-    const n    = filteredPhotos.length;
-    const suff = activeContributors.size ? ` (filtrées)` : '';
-    $countBadge.textContent = `${n} photo${n > 1 ? 's' : ''}${suff}`;
-    document.getElementById('settings-btn').classList.toggle('filter-on', activeContributors.size > 0);
-    document.getElementById('filter-clear').disabled = activeContributors.size === 0;
+    const hasFilter = activeContributors.size || activeYears.size || activeDevices.size;
+    filteredPhotos = hasFilter
+      ? allPhotos.filter(p => {
+          if (activeContributors.size && !activeContributors.has(p.contributorFullName || '—')) return false;
+          if (activeYears.size) {
+            const y = p.dateCreated ? String(new Date(p.dateCreated * 1000).getFullYear()) : '';
+            if (!activeYears.has(y)) return false;
+          }
+          if (activeDevices.size) {
+            const dev = p.deviceModel || p.cameraModel || '';
+            if (!activeDevices.has(dev)) return false;
+          }
+          return true;
+        })
+      : allPhotos;
+    const n = filteredPhotos.length;
+    $countBadge.textContent = `${n} photo${n > 1 ? 's' : ''}${hasFilter ? ' (filtrées)' : ''}`;
+    document.getElementById('settings-btn').classList.toggle('filter-on', !!hasFilter);
+    document.getElementById('filter-clear').disabled = !hasFilter;
     $gallery.innerHTML = '';
     loadedCount = 0;
     if (n === 0) {
@@ -814,36 +840,61 @@
   }
 
   function buildFilterUI() {
-    const counts = {};
+    let anyVisible = false;
+
+    function attachChips($el, activeSet, keyFn = v => v) {
+      $el.addEventListener('click', e => {
+        const chip = e.target.closest('.filter-chip');
+        if (!chip) return;
+        const val = keyFn(chip.dataset.val);
+        if (activeSet.has(val)) activeSet.delete(val);
+        else activeSet.add(val);
+        $el.querySelectorAll('.filter-chip').forEach(c =>
+          c.classList.toggle('active', activeSet.has(keyFn(c.dataset.val)))
+        );
+        applyFilter();
+      });
+    }
+
+    function buildSection(groupId, chipsId, items, activeSet, keyFn) {
+      if (items.length <= 1) return;
+      anyVisible = true;
+      document.getElementById(groupId).style.display = '';
+      const $el = document.getElementById(chipsId);
+      $el.innerHTML = items.map(([label, count]) =>
+        `<button class="filter-chip" data-val="${String(label).replace(/"/g,'&quot;')}">${label} <span class="filter-chip-count">${count}</span></button>`
+      ).join('');
+      attachChips($el, activeSet, keyFn);
+    }
+
+    // Contributeurs
+    const cCounts = {};
+    allPhotos.forEach(p => { const n = p.contributorFullName || '—'; cCounts[n] = (cCounts[n]||0)+1; });
+    buildSection('contrib-group', 'contrib-chips',
+      Object.entries(cCounts).sort((a,b) => a[0].localeCompare(b[0])),
+      activeContributors);
+
+    // Années
+    const yCounts = {};
     allPhotos.forEach(p => {
-      const name = p.contributorFullName || '—';
-      counts[name] = (counts[name] || 0) + 1;
+      if (p.dateCreated) { const y = String(new Date(p.dateCreated*1000).getFullYear()); yCounts[y]=(yCounts[y]||0)+1; }
     });
-    const names = Object.keys(counts).sort();
-    if (names.length <= 1) return;
+    buildSection('year-group', 'year-chips',
+      Object.entries(yCounts).sort((a,b) => b[0]-a[0]),
+      activeYears);
 
-    const section = document.getElementById('filter-section');
-    section.style.display = '';
-    const $chips = document.getElementById('filter-chips');
-    $chips.innerHTML = names.map(name =>
-      `<button class="filter-chip" data-name="${name.replace(/"/g,'&quot;')}">${name} <span class="filter-chip-count">${counts[name]}</span></button>`
-    ).join('');
+    // Appareils (seulement si le champ existe dans les données)
+    const dCounts = {};
+    allPhotos.forEach(p => { const d = p.deviceModel || p.cameraModel || ''; if (d) dCounts[d]=(dCounts[d]||0)+1; });
+    buildSection('device-group', 'device-chips',
+      Object.entries(dCounts).sort((a,b) => a[0].localeCompare(b[0])),
+      activeDevices);
 
-    $chips.addEventListener('click', e => {
-      const chip = e.target.closest('.filter-chip');
-      if (!chip) return;
-      const name = chip.dataset.name;
-      if (activeContributors.has(name)) activeContributors.delete(name);
-      else activeContributors.add(name);
-      $chips.querySelectorAll('.filter-chip').forEach(c =>
-        c.classList.toggle('active', activeContributors.has(c.dataset.name))
-      );
-      applyFilter();
-    });
-
+    if (!anyVisible) return;
+    document.getElementById('filter-section').style.display = '';
     document.getElementById('filter-clear').addEventListener('click', () => {
-      activeContributors.clear();
-      $chips.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      activeContributors.clear(); activeYears.clear(); activeDevices.clear();
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
       applyFilter();
     });
   }
