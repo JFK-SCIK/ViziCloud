@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { setupNotificationToggle } from './notifications.js';
 
 const $panel   = document.getElementById('settings-panel');
 const $overlay = document.getElementById('settings-overlay');
@@ -27,4 +28,5 @@ export function setupSettingsEvents() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   $overlay.addEventListener('click', closeSettings);
+  setupNotificationToggle();
 }

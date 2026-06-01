@@ -21,6 +21,37 @@ self.addEventListener('activate', e => {
   );
 });
 
+// ── Push notifications ────────────────────────────────────────────────────────
+
+self.addEventListener('push', event => {
+  if (!event.data) return;
+  const data = event.data.json();
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(data.title || 'ViziCloud', {
+      body:      data.body || 'Nouvelles photos dans l\'album',
+      icon:      '/icons/icon-192.png',
+      badge:     '/icons/icon-192.png',
+      tag:       'vizicloud-new-photos',
+      renotify:  true,
+      data:      { url: '/', token: data.token },
+    }),
+    navigator.setAppBadge ? navigator.setAppBadge(data.count || 1) : Promise.resolve(),
+  ]));
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(wins => {
+      const existing = wins.find(w => w.url.includes(self.location.origin));
+      if (existing) return existing.focus();
+      return clients.openWindow(event.notification.data?.url || '/');
+    })
+  );
+});
+
+// ── Fetch cache ───────────────────────────────────────────────────────────────
+
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
