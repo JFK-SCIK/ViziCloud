@@ -15,7 +15,7 @@ Hébergée sur GitHub Pages, proxifiée par un serveur FastAPI sur GCP.
 ## État actuel (mai 2026)
 
 ### Stack
-- HTML/CSS/JS vanilla dans `index.html` (pas de build, pas de framework)
+- HTML/CSS/JS vanilla avec ES modules natifs (`type="module"`) — pas de build, pas de framework
 - FastAPI (`server/main.py`) : proxy iCloud + serveur de fichiers statiques
 - Caddy : reverse proxy HTTPS avec Let's Encrypt
 - GitHub Actions : génère `version.json` (hash commit) à chaque push sur `main`
@@ -41,14 +41,27 @@ Hébergée sur GitHub Pages, proxifiée par un serveur FastAPI sur GCP.
 
 ### Fichiers clés
 ```
-index.html          — app complète (galerie, lightbox, filtres, settings)
+index.html          — shell HTML pur (~68 lignes)
+admin.html          — interface admin (gestion albums, déploiement)
 manifest.json       — config PWA (standalone, dark theme, vizir icon)
 sw.js               — service worker
 albums.json         — liste des albums iCloud configurables
-admin.html          — interface admin (gestion albums, déploiement)
-deploy.sh           — script de déploiement sur VM (git pull + restart)
+css/
+  app.css           — styles partagés index.html + admin.html
+js/
+  config.js         — PAGE_SIZE, USE_PROXY
+  state.js          — état global (allPhotos, filteredPhotos, urlCache, activeFilters…)
+  ui.js             — showToast, setLoading, toDate, formatDate
+  api.js            — icloudPost, ensureUrls
+  album.js          — loadAlbumConfig, TOKEN, apiBase
+  gallery.js        — appendBatch, setupScrollObserver
+  filter.js         — applyFilter, buildFilterUI
+  lightbox.js       — openLightbox, closeLightbox, loadLbPhoto, swipe, events
+  settings.js       — openSettings, closeSettings, events
+  version.js        — checkVersion, doUpdate, startVersionPolling
+  app.js            — init(), boot, events global
 server/
-  main.py           — FastAPI proxy iCloud + static files
+  main.py           — FastAPI proxy iCloud + static files + admin API
   requirements.txt  — fastapi, uvicorn, httpx, aiofiles
   setup.sh          — setup VM (venv, systemd, Caddy config)
 icons/
@@ -67,14 +80,19 @@ tools/
 ```
 Navigateur
     │
-    ├── GitHub Pages ──► index.html, sw.js, manifest.json, albums.json, version.json
+    ├── GitHub Pages ──► index.html, css/, js/, sw.js, manifest.json, albums.json, version.json
+    │   (USE_PROXY=false — iCloud appelé directement, Apple whitelist)
     │
     └── vizicloud.duckdns.org (Caddy)
-            │
+            │   (USE_PROXY=true — proxy FastAPI)
             └── FastAPI :8002
-                    ├── GET  /           → index.html statique
+                    ├── GET  /                           → fichiers statiques (StaticFiles)
                     ├── POST /api/{token}/webstream      → proxy iCloud
                     ├── POST /api/{token}/webasseturls   → proxy iCloud
+                    ├── GET  /version.json               → git rev-parse HEAD
+                    ├── GET  /albums.json                → liste albums (server/data/)
+                    ├── GET  /admin                      → admin.html
+                    ├── GET|POST /admin/*                → CRUD albums, deploy, logs
                     └── (iCloud sert les images directement au navigateur)
 ```
 
@@ -94,13 +112,7 @@ Navigateur
 
 ## Roadmap
 
-### Prochaine étape : urbanisation du code (avant B)
-`index.html` est un fichier monolithique de ~900 lignes. Avant d'implémenter B,
-une session de refactoring est prévue pour :
-- Séparer CSS / HTML / JS (ou au minimum découper le JS en modules)
-- Clarifier les responsabilités (couche API, couche UI, couche état)
-- Préparer les points d'extension pour le cache serveur (endpoints futurs)
-- **Lire ce document avant de commencer le refactoring**
+### Prochaine étape : Stratégie B — Cache serveur
 
 ### Stratégie B — Cache serveur (à implémenter)
 
