@@ -28,7 +28,10 @@ def _load_vapid():
     priv = DATA_DIR / 'vapid_private.pem'
     pub  = DATA_DIR / 'vapid_public.txt'
     if not priv.exists() or not pub.exists():
-        _generate_vapid(priv, pub)
+        try:
+            _generate_vapid(priv, pub)
+        except Exception:
+            return  # pywebpush/cryptography absent — serveur démarre quand même
     if priv.exists() and pub.exists():
         _vapid_private_key = priv.read_text().strip()
         _vapid_public_key  = pub.read_text().strip()
