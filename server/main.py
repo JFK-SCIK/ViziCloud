@@ -27,9 +27,28 @@ def _load_vapid():
     global _vapid_private_key, _vapid_public_key
     priv = DATA_DIR / 'vapid_private.pem'
     pub  = DATA_DIR / 'vapid_public.txt'
+    if not priv.exists() or not pub.exists():
+        _generate_vapid(priv, pub)
     if priv.exists() and pub.exists():
         _vapid_private_key = priv.read_text().strip()
         _vapid_public_key  = pub.read_text().strip()
+
+
+def _generate_vapid(priv_path: Path, pub_path: Path):
+    try:
+        import base64
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives.serialization import (
+            Encoding, PublicFormat, PrivateFormat, NoEncryption,
+        )
+        key      = ec.generate_private_key(ec.SECP256R1())
+        priv_pem = key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+        pub_raw  = key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+        pub_b64  = base64.urlsafe_b64encode(pub_raw).rstrip(b'=').decode()
+        priv_path.write_bytes(priv_pem)
+        pub_path.write_text(pub_b64)
+    except Exception:
+        pass
 
 
 # ── Subscriptions ─────────────────────────────────────────────────────────────
