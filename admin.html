@@ -317,14 +317,34 @@ async function deployNow() {
   const btn = document.getElementById('btn-deploy');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Déploiement…';
+
+  let currentSha = null;
+  try { currentSha = (await fetch('/version.json', { cache: 'no-store' }).then(r => r.json())).commit; } catch (_) {}
+
   try {
     const r = await api('POST', '/deploy/now');
     if (r.up_to_date) {
       toast('Déjà à jour — aucun déploiement nécessaire.', 'info');
-    } else {
-      toast('Déploiement lancé !\n(rechargement dans 12s…)', 'success');
-      setTimeout(() => location.reload(), 12000);
+      return;
     }
+
+    // Attendre que le nouveau commit soit servi (max 60s, poll toutes les 2s)
+    const deadline = Date.now() + 60_000;
+    let secs = 0;
+    while (Date.now() < deadline) {
+      await new Promise(res => setTimeout(res, 2000));
+      secs += 2;
+      btn.innerHTML = `<span class="spin"></span> Attente… ${secs}s`;
+      try {
+        const v = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json());
+        if (v.commit && v.commit !== currentSha) {
+          toast('Déployé ! Rechargement…', 'success');
+          setTimeout(() => location.href = location.pathname + (PWD ? `?pwd=${encodeURIComponent(PWD)}` : ''), 600);
+          return;
+        }
+      } catch (_) { /* serveur en cours de redémarrage */ }
+    }
+    toast('Déploiement lancé — rechargez manuellement dans quelques secondes.', 'info');
   } catch (e) {
     toast(`Erreur : ${e.message}`, 'error');
   } finally {
