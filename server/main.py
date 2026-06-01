@@ -35,20 +35,17 @@ def _load_vapid():
 
 
 def _generate_vapid(priv_path: Path, pub_path: Path):
-    try:
-        import base64
-        from cryptography.hazmat.primitives.asymmetric import ec
-        from cryptography.hazmat.primitives.serialization import (
-            Encoding, PublicFormat, PrivateFormat, NoEncryption,
-        )
-        key      = ec.generate_private_key(ec.SECP256R1())
-        priv_pem = key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
-        pub_raw  = key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
-        pub_b64  = base64.urlsafe_b64encode(pub_raw).rstrip(b'=').decode()
-        priv_path.write_bytes(priv_pem)
-        pub_path.write_text(pub_b64)
-    except Exception:
-        pass
+    import base64
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding, PublicFormat, PrivateFormat, NoEncryption,
+    )
+    key      = ec.generate_private_key(ec.SECP256R1())
+    priv_pem = key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+    pub_raw  = key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+    pub_b64  = base64.urlsafe_b64encode(pub_raw).rstrip(b'=').decode()
+    priv_path.write_bytes(priv_pem)
+    pub_path.write_text(pub_b64)
 
 
 # ── Subscriptions ─────────────────────────────────────────────────────────────
@@ -261,6 +258,19 @@ async def push_check_now(pwd: str = ''):
     _check_admin(pwd)
     asyncio.create_task(_poll_albums())
     return {'ok': True}
+
+
+@app.post('/admin/gen-vapid')
+async def admin_gen_vapid(pwd: str = ''):
+    _check_admin(pwd)
+    priv = DATA_DIR / 'vapid_private.pem'
+    pub  = DATA_DIR / 'vapid_public.txt'
+    try:
+        _generate_vapid(priv, pub)
+        _load_vapid()
+        return {'ok': True, 'public_key': _vapid_public_key}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get('/admin/push/status')
