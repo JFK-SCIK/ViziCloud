@@ -263,6 +263,18 @@ async def push_check_now(pwd: str = ''):
     return {'ok': True}
 
 
+@app.get('/admin/push/status')
+async def push_status(pwd: str = ''):
+    _check_admin(pwd)
+    subs   = _load_subscriptions()
+    state  = _load_stream_state()
+    return {
+        'vapid_ready':   bool(_vapid_public_key),
+        'subscriptions': len(subs),
+        'albums_state':  {t: s.get('count', 0) for t, s in state.items()},
+    }
+
+
 # ── iCloud proxy ──────────────────────────────────────────────────────────────
 
 @app.post('/api/{token}/{endpoint}')
