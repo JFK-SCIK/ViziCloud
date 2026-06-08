@@ -1,4 +1,4 @@
-const CACHE = 'vizicloud-v1';
+const CACHE = 'vizicloud-v2';
 const SHELL = [
   './',
   './manifest.json',
@@ -66,6 +66,12 @@ self.addEventListener('fetch', e => {
 
   // GET only
   if (e.request.method !== 'GET') return;
+
+  // Never cache dynamic endpoints
+  const path = new URL(url).pathname;
+  if (path.startsWith('/push/') || path.startsWith('/api/') ||
+      path.startsWith('/admin') || path === '/version.json' ||
+      path === '/albums.json') return;
 
   e.respondWith(
     caches.match(e.request).then(cached => {

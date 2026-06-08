@@ -7,7 +7,7 @@ function urlBase64ToUint8Array(b64) {
 }
 
 async function getVapidInfo() {
-  const res = await fetch('/push/vapid-public-key');
+  const res = await fetch('/push/vapid-public-key', { cache: 'no-store' });
   if (!res.ok) throw new Error(`Serveur : ${res.status}`);
   return await res.json(); // { key, generated_at }
 }

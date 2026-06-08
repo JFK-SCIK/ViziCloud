@@ -70,13 +70,16 @@ if ('serviceWorker' in navigator) {
 }
 
 /* ── Effacer notifs à l'ouverture de l'app ────────────────── */
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') return;
+function _clearNotifications() {
   if (navigator.clearAppBadge) navigator.clearAppBadge();
   navigator.serviceWorker.ready.then(reg => {
     reg.active?.postMessage('clear-notifications');
   }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') _clearNotifications();
 });
+window.addEventListener('focus', _clearNotifications);
 
 /* ── Version polling ──────────────────────────────────────── */
 startVersionPolling();
