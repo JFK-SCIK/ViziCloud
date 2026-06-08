@@ -421,7 +421,7 @@ header {
 }
 .settings-row:last-child { border-bottom: none; }
 .settings-muted { font-size: 0.75rem; color: var(--text-muted); font-family: 'Courier New', monospace; }
-.settings-sub   { font-size: 0.7rem; color: var(--text-muted); padding: 0.15rem 0 0.35rem; }
+.settings-sub   { font-size: 0.7rem; color: var(--text-muted); padding: 0.15rem 0 0.35rem; white-space: pre-line; word-break: break-all; }
 
 /* ── TOGGLE SWITCH ── */
 .toggle { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }

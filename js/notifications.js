@@ -6,17 +6,18 @@ function urlBase64ToUint8Array(b64) {
   return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
 }
 
-async function getVapidKey() {
+async function getVapidInfo() {
   const res = await fetch('/push/vapid-public-key');
   if (!res.ok) throw new Error(`Serveur : ${res.status}`);
-  return (await res.json()).key;
+  return await res.json(); // { key, generated_at }
 }
 
 export async function subscribePush() {
   // 1 — Clé VAPID
-  let vapidKey;
-  try { vapidKey = await getVapidKey(); }
+  let info;
+  try { info = await getVapidInfo(); }
   catch (e) { throw new Error(`Notifications non configurées sur le serveur (${e.message})`); }
+  const vapidKey = info?.key;
   if (!vapidKey) throw new Error('Clé VAPID absente');
 
   // 2 — Permission navigateur
@@ -33,7 +34,7 @@ export async function subscribePush() {
   try {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      applicationServerKey: urlBase64ToUint8Array(info.key),
     });
   } catch (e) {
     throw new Error(`Échec abonnement push : ${e.message}`);
@@ -85,10 +86,34 @@ export async function setupNotificationToggle() {
     const s = await getNotifState();
     toggle.checked  = s === 'subscribed';
     toggle.disabled = s === 'denied';
-    label.textContent = s === 'denied'     ? 'Bloquées (paramètres navigateur)'
-                      : s === 'subscribed' ? 'Activées'
-                      : 'Désactivées';
     label.style.color = '';
+
+    if (s === 'denied') {
+      label.textContent = 'Bloquées (paramètres navigateur)';
+      return;
+    }
+    if (s === 'unsubscribed') {
+      label.textContent = 'Désactivées';
+      return;
+    }
+
+    // subscribed — enrichir avec date VAPID + endpoint
+    const lines = ['Activées'];
+    try {
+      const [vapidInfo, reg] = await Promise.all([
+        getVapidInfo().catch(() => null),
+        navigator.serviceWorker.ready,
+      ]);
+      if (vapidInfo?.generated_at) {
+        const d = new Date(vapidInfo.generated_at);
+        lines.push(`Clés serveur : ${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`);
+      }
+      const sub = await reg.pushManager.getSubscription();
+      if (sub?.endpoint) {
+        lines.push(`Abonnement : …${sub.endpoint.slice(-36)}`);
+      }
+    } catch (_) {}
+    label.textContent = lines.join('\n');
   }
 
   await refresh();

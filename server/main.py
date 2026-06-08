@@ -240,7 +240,14 @@ def _launch_deploy():
 async def get_vapid_public_key():
     if not _vapid_public_key:
         raise HTTPException(status_code=503, detail='VAPID non configuré — exécuter gen_vapid.py')
-    return {'key': _vapid_public_key}
+    meta_path = DATA_DIR / 'vapid_meta.json'
+    generated_at = None
+    if meta_path.exists():
+        try:
+            generated_at = json.loads(meta_path.read_text()).get('generated_at')
+        except Exception:
+            pass
+    return {'key': _vapid_public_key, 'generated_at': generated_at}
 
 
 @app.post('/push/subscribe')

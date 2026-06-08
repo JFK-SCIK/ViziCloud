@@ -350,7 +350,7 @@ async function deployNow() {
         const v = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.json());
         if (v.commit && v.commit !== currentSha) {
           toast('Déployé ! Rechargement…', 'success');
-          setTimeout(() => location.href = location.pathname + (PWD ? `?pwd=${encodeURIComponent(PWD)}` : ''), 600);
+          setTimeout(() => location.reload(), 800);
           return;
         }
       } catch (_) { /* serveur en cours de redémarrage */ }
