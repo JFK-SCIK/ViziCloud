@@ -219,7 +219,8 @@
       <span><span class="spin"></span> Chargement…</span>
     </div>
     <div class="btn-row">
-      <button class="btn btn-primary" id="btn-push-test" onclick="pushCheckNow()">Tester maintenant</button>
+      <button class="btn btn-primary" id="btn-push-test" onclick="pushCheckNow()">Vérifier maintenant</button>
+      <button class="btn" id="btn-push-notif" onclick="pushSendTest()">Envoyer notif test</button>
       <button class="btn" id="btn-gen-vapid" onclick="genVapid()" style="display:none">Générer les clés VAPID</button>
     </div>
   </div>
@@ -383,6 +384,7 @@ async function loadPushStatus() {
     el.innerHTML = vapidLine + subLine;
     document.getElementById('btn-gen-vapid').style.display = s.vapid_ready ? 'none' : '';
     document.getElementById('btn-push-test').style.display = s.vapid_ready ? '' : 'none';
+    document.getElementById('btn-push-notif').style.display = (s.vapid_ready && s.subscriptions > 0) ? '' : 'none';
   } catch (e) {
     el.innerHTML = `<span style="color:var(--text-muted)">Impossible de charger (${esc(e.message)})</span>`;
   }
@@ -406,7 +408,7 @@ async function genVapid() {
 async function pushCheckNow() {
   const btn = document.getElementById('btn-push-test');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> Envoi…';
+  btn.innerHTML = '<span class="spin"></span> Vérification…';
   try {
     await api('POST', '/push/check');
     toast('Poll iCloud lancé — notification envoyée si nouvelles photos détectées.', 'success');
@@ -414,7 +416,23 @@ async function pushCheckNow() {
     toast(`Erreur : ${e.message}`, 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Tester maintenant';
+    btn.textContent = 'Vérifier maintenant';
+  }
+}
+
+async function pushSendTest() {
+  const btn = document.getElementById('btn-push-notif');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Envoi…';
+  try {
+    const r = await api('POST', '/admin/push/test');
+    toast(`Notif test envoyée : ${r.results.ok} OK, ${r.results.error} erreur(s), ${r.results.gone} expirés.`, r.results.ok > 0 ? 'success' : 'error');
+    await loadPushStatus();
+  } catch (e) {
+    toast(`Erreur : ${e.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Envoyer notif test';
   }
 }
 

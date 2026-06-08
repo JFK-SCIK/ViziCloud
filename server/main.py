@@ -263,6 +263,31 @@ async def push_check_now(pwd: str = ''):
     return {'ok': True}
 
 
+@app.post('/admin/push/test')
+async def admin_push_test(pwd: str = ''):
+    _check_admin(pwd)
+    if not _vapid_private_key:
+        raise HTTPException(status_code=503, detail='VAPID non configuré')
+    subs = _load_subscriptions()
+    if not subs:
+        raise HTTPException(status_code=400, detail='Aucun abonné enregistré')
+    payload = {
+        'title': 'ViziCloud — Test',
+        'body':  'Notification de test envoyée depuis l\'admin.',
+        'count': 1,
+    }
+    results = {'ok': 0, 'gone': 0, 'error': 0}
+    dead = set()
+    for i, sub in enumerate(subs):
+        r = await _send_push(sub, payload)
+        results[r] += 1
+        if r == 'gone':
+            dead.add(i)
+    if dead:
+        _save_subscriptions([s for i, s in enumerate(subs) if i not in dead])
+    return {'ok': True, 'results': results, 'total': len(subs)}
+
+
 @app.post('/admin/gen-vapid')
 async def admin_gen_vapid(pwd: str = ''):
     _check_admin(pwd)
