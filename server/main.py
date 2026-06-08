@@ -40,15 +40,16 @@ def _load_vapid():
 def _generate_vapid(priv_path: Path, pub_path: Path):
     import base64
     from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.hazmat.primitives.serialization import (
-        Encoding, PublicFormat, PrivateFormat, NoEncryption,
-    )
-    key      = ec.generate_private_key(ec.SECP256R1())
-    # PKCS8 avoids "explicit parameters" ASN.1 issue with pywebpush
-    priv_pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
-    pub_raw  = key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
-    pub_b64  = base64.urlsafe_b64encode(pub_raw).rstrip(b'=').decode()
-    priv_path.write_bytes(priv_pem)
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    key     = ec.generate_private_key(ec.SECP256R1())
+    # Store as raw base64url scalar — pywebpush 2.x expects this, not PEM
+    priv_b64 = base64.urlsafe_b64encode(
+        key.private_numbers().private_value.to_bytes(32, 'big')
+    ).rstrip(b'=').decode()
+    pub_b64  = base64.urlsafe_b64encode(
+        key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
+    ).rstrip(b'=').decode()
+    priv_path.write_text(priv_b64)
     pub_path.write_text(pub_b64)
 
 

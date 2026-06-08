@@ -404,12 +404,13 @@ async function genVapid() {
   btn.innerHTML = '<span class="spin"></span> Génération…';
   try {
     await api('POST', '/admin/gen-vapid');
-    toast('Clés VAPID générées !', 'success');
+    showModal('✓ Clés VAPID régénérées', 'Nouvelles clés générées.\n\nIMPORTANT : les abonnements existants sont liés aux anciennes clés.\nSur le téléphone, désactiver puis réactiver le toggle Notifications pour recréer un abonnement valide.');
     await loadPushStatus();
   } catch (e) {
-    toast(`Erreur : ${e.message}`, 'error');
+    toast(`Erreur génération VAPID : ${e.message}`, 'error');
+  } finally {
     btn.disabled = false;
-    btn.textContent = 'Générer les clés VAPID';
+    btn.textContent = 'Générer / régénérer les clés VAPID';
   }
 }
 
