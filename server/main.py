@@ -39,10 +39,11 @@ def _load_vapid():
 
 def _generate_vapid(priv_path: Path, pub_path: Path):
     import base64
+    from datetime import datetime, timezone
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     key     = ec.generate_private_key(ec.SECP256R1())
-    # Store as raw base64url scalar — pywebpush 2.x expects this, not PEM
+    # Raw base64url scalar — pywebpush 2.x expects this, not PEM
     priv_b64 = base64.urlsafe_b64encode(
         key.private_numbers().private_value.to_bytes(32, 'big')
     ).rstrip(b'=').decode()
@@ -51,6 +52,9 @@ def _generate_vapid(priv_path: Path, pub_path: Path):
     ).rstrip(b'=').decode()
     priv_path.write_text(priv_b64)
     pub_path.write_text(pub_b64)
+    (DATA_DIR / 'vapid_meta.json').write_text(
+        json.dumps({'generated_at': datetime.now(timezone.utc).isoformat()})
+    )
 
 
 # ── Subscriptions ─────────────────────────────────────────────────────────────
@@ -303,6 +307,7 @@ async def admin_gen_vapid(pwd: str = ''):
     try:
         _generate_vapid(priv, pub)
         _load_vapid()
+        _save_subscriptions([])  # old subs are tied to previous key
         return {'ok': True, 'public_key': _vapid_public_key}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -311,12 +316,26 @@ async def admin_gen_vapid(pwd: str = ''):
 @app.get('/admin/push/status')
 async def push_status(pwd: str = ''):
     _check_admin(pwd)
-    subs   = _load_subscriptions()
-    state  = _load_stream_state()
+    subs  = _load_subscriptions()
+    state = _load_stream_state()
+    meta_path = DATA_DIR / 'vapid_meta.json'
+    generated_at = None
+    if meta_path.exists():
+        try:
+            generated_at = json.loads(meta_path.read_text()).get('generated_at')
+        except Exception:
+            pass
+    sub_list = [
+        {'endpoint_short': s.get('endpoint', '')[-40:]}
+        for s in subs
+    ]
     return {
-        'vapid_ready':   bool(_vapid_public_key),
-        'subscriptions': len(subs),
-        'albums_state':  {t: s.get('count', 0) for t, s in state.items()},
+        'vapid_ready':    bool(_vapid_public_key),
+        'vapid_public_key': _vapid_public_key,
+        'vapid_generated_at': generated_at,
+        'subscriptions':  len(subs),
+        'sub_list':       sub_list,
+        'albums_state':   {t: s.get('count', 0) for t, s in state.items()},
     }
 
 

@@ -249,7 +249,7 @@
 <div class="toast" id="toast"></div>
 
 <!-- Modal de résultat persistant -->
-<div id="result-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1.5rem;" onclick="closeModal(event)">
+<div id="result-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;padding:1.5rem;" onclick="closeModal(event)">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
     <div id="modal-title" style="font-weight:600;font-size:1rem;margin-bottom:0.75rem"></div>
     <pre id="modal-body" style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:0.875rem;color:var(--text-muted);margin:0 0 1.25rem"></pre>
@@ -386,11 +386,27 @@ async function loadPushStatus() {
   const el = document.getElementById('push-info');
   try {
     const s = await api('GET', '/admin/push/status');
-    const vapidLine = s.vapid_ready
-      ? `<span><span class="dot dot-green"></span>Clés VAPID configurées</span>`
-      : `<span style="color:var(--warning)">⚠ Clés VAPID manquantes</span>`;
-    const subLine = `<span>${s.subscriptions} appareil${s.subscriptions > 1 ? 's' : ''} abonné${s.subscriptions > 1 ? 's' : ''}</span>`;
-    el.innerHTML = vapidLine + subLine;
+    const lines = [];
+    if (s.vapid_ready) {
+      lines.push(`<span><span class="dot dot-green"></span>Clés VAPID configurées</span>`);
+      if (s.vapid_generated_at) {
+        const d = new Date(s.vapid_generated_at);
+        lines.push(`<span style="font-size:0.8125rem;color:var(--text-muted)">Générées le ${d.toLocaleString('fr-FR')}</span>`);
+      }
+      if (s.vapid_public_key) {
+        lines.push(`<span style="font-size:0.75rem;font-family:'Courier New',monospace;color:var(--text-muted);word-break:break-all">Clé pub : ${esc(s.vapid_public_key)}</span>`);
+      }
+    } else {
+      lines.push(`<span style="color:var(--warning)">⚠ Clés VAPID manquantes</span>`);
+    }
+    const n = s.subscriptions;
+    lines.push(`<span>${n} appareil${n > 1 ? 's' : ''} abonné${n > 1 ? 's' : ''}</span>`);
+    if (s.sub_list && s.sub_list.length) {
+      lines.push(...s.sub_list.map(sub =>
+        `<span style="font-size:0.75rem;font-family:'Courier New',monospace;color:var(--text-muted);margin-left:0.75rem">…${esc(sub.endpoint_short)}</span>`
+      ));
+    }
+    el.innerHTML = lines.join('');
     document.getElementById('btn-push-test').style.display = s.vapid_ready ? '' : 'none';
     document.getElementById('btn-push-notif').style.display = (s.vapid_ready && s.subscriptions > 0) ? '' : 'none';
   } catch (e) {
@@ -573,7 +589,8 @@ function toggleAddForm(force) {
 function showModal(title, body) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').textContent  = body;
-  document.getElementById('result-modal').style.display = 'flex';
+  const m = document.getElementById('result-modal');
+  m.style.display = 'flex';
 }
 function closeModal(e) {
   if (e && e.target !== document.getElementById('result-modal')) return;
