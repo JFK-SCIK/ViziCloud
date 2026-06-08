@@ -426,7 +426,8 @@ async function pushSendTest() {
   btn.innerHTML = '<span class="spin"></span> Envoi…';
   try {
     const r = await api('POST', '/admin/push/test');
-    toast(`Notif test envoyée : ${r.results.ok} OK, ${r.results.error} erreur(s), ${r.results.gone} expirés.`, r.results.ok > 0 ? 'success' : 'error');
+    const errDetail = r.errors && r.errors.length ? ` — ${r.errors[0]}` : '';
+    toast(`Notif test : ${r.results.ok} OK, ${r.results.error} erreur(s)${errDetail}`, r.results.ok > 0 ? 'success' : 'error');
     await loadPushStatus();
   } catch (e) {
     toast(`Erreur : ${e.message}`, 'error');

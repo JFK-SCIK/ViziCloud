@@ -75,14 +75,14 @@ def _save_stream_state(state: dict):
 
 # ── Push delivery ─────────────────────────────────────────────────────────────
 
-async def _send_push(sub_info: dict, payload: dict) -> str:
-    """Returns 'ok', 'gone' (expired), or 'error'."""
+async def _send_push(sub_info: dict, payload: dict) -> tuple[str, str]:
+    """Returns ('ok'|'gone'|'error', detail_message)."""
     if not _vapid_private_key:
-        return 'error'
+        return ('error', 'VAPID private key not loaded')
     try:
         from pywebpush import webpush, WebPushException
     except ImportError:
-        return 'error'
+        return ('error', 'pywebpush not installed')
 
     def _do():
         try:
@@ -90,15 +90,17 @@ async def _send_push(sub_info: dict, payload: dict) -> str:
                 subscription_info=sub_info,
                 data=json.dumps(payload),
                 vapid_private_key=_vapid_private_key,
-                vapid_claims={'sub': 'mailto:vizicloud@noreply.local'},
+                vapid_claims={'sub': 'mailto:admin@vizicloud.app'},
                 ttl=86400,
             )
-            return 'ok'
+            return ('ok', '')
         except Exception as exc:
+            detail = str(exc)
             if hasattr(exc, 'response') and exc.response is not None:
                 if exc.response.status_code == 410:
-                    return 'gone'
-            return 'error'
+                    return ('gone', detail)
+                detail = f'HTTP {exc.response.status_code}: {exc.response.text[:300]}'
+            return ('error', detail)
 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _do)
@@ -164,7 +166,7 @@ async def _poll_albums():
     dead = set()
     for i, sub in enumerate(subs):
         for notif in notifications:
-            result = await _send_push(sub, notif)
+            result, _ = await _send_push(sub, notif)
             if result == 'gone':
                 dead.add(i)
                 break
@@ -277,15 +279,18 @@ async def admin_push_test(pwd: str = ''):
         'count': 1,
     }
     results = {'ok': 0, 'gone': 0, 'error': 0}
+    errors = []
     dead = set()
     for i, sub in enumerate(subs):
-        r = await _send_push(sub, payload)
+        r, detail = await _send_push(sub, payload)
         results[r] += 1
         if r == 'gone':
             dead.add(i)
+        elif r == 'error' and detail:
+            errors.append(detail)
     if dead:
         _save_subscriptions([s for i, s in enumerate(subs) if i not in dead])
-    return {'ok': True, 'results': results, 'total': len(subs)}
+    return {'ok': True, 'results': results, 'total': len(subs), 'errors': errors}
 
 
 @app.post('/admin/gen-vapid')
