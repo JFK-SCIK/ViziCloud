@@ -80,6 +80,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') _clearNotifications();
 });
 window.addEventListener('focus', _clearNotifications);
+// Aussi au démarrage : app ouverte depuis l'icône (pas de visibilitychange)
+_clearNotifications();
 
 /* ── Version polling ──────────────────────────────────────── */
 startVersionPolling();

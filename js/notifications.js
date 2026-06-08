@@ -100,22 +100,25 @@ export async function setupNotificationToggle() {
       return;
     }
 
-    // subscribed — enrichir avec date VAPID + endpoint
+    // subscribed — enrichir avec endpoint (local) + date VAPID (serveur)
     const lines = ['Activées'];
+
+    // Endpoint : lecture locale, pas de réseau
     try {
-      const [vapidInfo, reg] = await Promise.all([
-        getVapidInfo().catch(() => null),
-        navigator.serviceWorker.ready,
-      ]);
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub?.endpoint) lines.push(`Abonnement : …${sub.endpoint.slice(-36)}`);
+    } catch (_) {}
+
+    // Date des clés VAPID : appel serveur
+    try {
+      const vapidInfo = await getVapidInfo();
       if (vapidInfo?.generated_at) {
         const d = new Date(vapidInfo.generated_at);
-        lines.push(`Clés serveur : ${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`);
-      }
-      const sub = await reg.pushManager.getSubscription();
-      if (sub?.endpoint) {
-        lines.push(`Abonnement : …${sub.endpoint.slice(-36)}`);
+        lines.push(`Clés : ${d.toLocaleDateString('fr-FR')} ${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`);
       }
     } catch (_) {}
+
     label.textContent = lines.join('\n');
   }
 
