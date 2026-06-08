@@ -44,7 +44,8 @@ def _generate_vapid(priv_path: Path, pub_path: Path):
         Encoding, PublicFormat, PrivateFormat, NoEncryption,
     )
     key      = ec.generate_private_key(ec.SECP256R1())
-    priv_pem = key.private_bytes(Encoding.PEM, PrivateFormat.TraditionalOpenSSL, NoEncryption())
+    # PKCS8 avoids "explicit parameters" ASN.1 issue with pywebpush
+    priv_pem = key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
     pub_raw  = key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
     pub_b64  = base64.urlsafe_b64encode(pub_raw).rstrip(b'=').decode()
     priv_path.write_bytes(priv_pem)

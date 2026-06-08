@@ -221,7 +221,7 @@
     <div class="btn-row">
       <button class="btn btn-primary" id="btn-push-test" onclick="pushCheckNow()">Vérifier maintenant</button>
       <button class="btn" id="btn-push-notif" onclick="pushSendTest()">Envoyer notif test</button>
-      <button class="btn" id="btn-gen-vapid" onclick="genVapid()" style="display:none">Générer les clés VAPID</button>
+      <button class="btn" id="btn-gen-vapid" onclick="genVapid()">Générer / régénérer les clés VAPID</button>
     </div>
   </div>
 
@@ -247,6 +247,15 @@
 </main>
 
 <div class="toast" id="toast"></div>
+
+<!-- Modal de résultat persistant -->
+<div id="result-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1.5rem;" onclick="closeModal(event)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:480px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+    <div id="modal-title" style="font-weight:600;font-size:1rem;margin-bottom:0.75rem"></div>
+    <pre id="modal-body" style="white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:0.875rem;color:var(--text-muted);margin:0 0 1.25rem"></pre>
+    <button class="btn btn-primary" onclick="closeModal()">OK</button>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -382,7 +391,6 @@ async function loadPushStatus() {
       : `<span style="color:var(--warning)">⚠ Clés VAPID manquantes</span>`;
     const subLine = `<span>${s.subscriptions} appareil${s.subscriptions > 1 ? 's' : ''} abonné${s.subscriptions > 1 ? 's' : ''}</span>`;
     el.innerHTML = vapidLine + subLine;
-    document.getElementById('btn-gen-vapid').style.display = s.vapid_ready ? 'none' : '';
     document.getElementById('btn-push-test').style.display = s.vapid_ready ? '' : 'none';
     document.getElementById('btn-push-notif').style.display = (s.vapid_ready && s.subscriptions > 0) ? '' : 'none';
   } catch (e) {
@@ -426,8 +434,12 @@ async function pushSendTest() {
   btn.innerHTML = '<span class="spin"></span> Envoi…';
   try {
     const r = await api('POST', '/admin/push/test');
-    const errDetail = r.errors && r.errors.length ? ` — ${r.errors[0]}` : '';
-    toast(`Notif test : ${r.results.ok} OK, ${r.results.error} erreur(s)${errDetail}`, r.results.ok > 0 ? 'success' : 'error');
+    const lines = [
+      `Résultat : ${r.results.ok} OK  |  ${r.results.error} erreur(s)  |  ${r.results.gone} expirés`,
+      `Total abonnés : ${r.total}`,
+    ];
+    if (r.errors && r.errors.length) lines.push('', 'Détail erreur :', ...r.errors);
+    showModal(r.results.ok > 0 ? '✓ Notification envoyée' : '✗ Échec de livraison', lines.join('\n'));
     await loadPushStatus();
   } catch (e) {
     toast(`Erreur : ${e.message}`, 'error');
@@ -554,6 +566,17 @@ function toggleAddForm(force) {
   const open = force !== undefined ? force : !el.classList.contains('open');
   el.classList.toggle('open', open);
   document.getElementById('btn-toggle-add').textContent = open ? '✕ Annuler' : '+ Ajouter un album';
+}
+
+/* ── Modal ────────────────────────────────────────────── */
+function showModal(title, body) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent  = body;
+  document.getElementById('result-modal').style.display = 'flex';
+}
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('result-modal')) return;
+  document.getElementById('result-modal').style.display = 'none';
 }
 
 /* ── Init ─────────────────────────────────────────────── */
