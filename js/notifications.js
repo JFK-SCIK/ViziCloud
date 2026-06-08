@@ -71,6 +71,9 @@ async function getNotifState() {
   return sub ? 'subscribed' : 'unsubscribed';
 }
 
+let _refreshNotif = null;
+export function refreshNotifStatus() { _refreshNotif?.(); }
+
 export async function setupNotificationToggle() {
   const section = document.getElementById('notif-section');
   if (!section) return;
@@ -116,6 +119,7 @@ export async function setupNotificationToggle() {
     label.textContent = lines.join('\n');
   }
 
+  _refreshNotif = refresh;
   await refresh();
 
   toggle.addEventListener('change', async () => {

@@ -50,6 +50,12 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
+self.addEventListener('message', event => {
+  if (event.data === 'clear-notifications') {
+    self.registration.getNotifications().then(notifs => notifs.forEach(n => n.close()));
+  }
+});
+
 // ── Fetch cache ───────────────────────────────────────────────────────────────
 
 self.addEventListener('fetch', e => {

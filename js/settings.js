@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { setupNotificationToggle } from './notifications.js';
+import { setupNotificationToggle, refreshNotifStatus } from './notifications.js';
 
 const $panel   = document.getElementById('settings-panel');
 const $overlay = document.getElementById('settings-overlay');
@@ -9,6 +9,7 @@ export function openSettings() {
   $overlay.classList.add('open');
   history.pushState({ panel: 'settings' }, '');
   state.settingsPushedHistory = true;
+  refreshNotifStatus();
 }
 
 export function closeSettingsUI() {
