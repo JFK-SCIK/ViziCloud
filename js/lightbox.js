@@ -10,6 +10,7 @@ const $lbCaption = document.getElementById('lb-caption');
 const $lbDate    = document.getElementById('lb-date');
 const $lbPrev    = document.getElementById('lb-prev');
 const $lbNext    = document.getElementById('lb-next');
+const $lbWrap    = document.getElementById('lb-wrap');
 
 export async function openLightbox(index) {
   state.lbIndex = index;
@@ -26,7 +27,7 @@ export function closeLightbox() {
   $lbVideo.style.display = 'none';
   $lbImg.src = '';
   $lbImg.style.display = 'block';
-  $lightbox.classList.remove('open');
+  $lightbox.classList.remove('open', 'chrome-hidden');
   document.body.style.overflow = '';
   state.lbIndex = -1;
   if (state.lbPushedHistory) {
@@ -39,6 +40,7 @@ export async function loadLbPhoto(index) {
   const photo = state.filteredPhotos[index];
   if (!photo) return;
   state.lbIndex = index;
+  $lightbox.classList.remove('chrome-hidden');
 
   $lbCounter.textContent = `${index + 1} / ${state.filteredPhotos.length}`;
   $lbCaption.textContent = photo.caption || '';
@@ -61,7 +63,6 @@ export async function loadLbPhoto(index) {
   const urls  = state.urlCache[photo.photoGuid] || {};
   const src   = urls.full || urls.thumb || '';
   const isVid = urls.isVideo || false;
-  const ext   = isVid ? '.mp4' : '.jpg';
 
   if (src) {
     if (isVid) {
@@ -78,7 +79,28 @@ export async function loadLbPhoto(index) {
     }
   }
 
-  document.getElementById('lb-download-btn').onclick = () => downloadPhoto(src, `vizicloud_${index + 1}${ext}`);
+  document.getElementById('lb-download-btn').onclick = () => downloadPhoto(src, buildPhoSyFilename(photo, src, isVid));
+}
+
+function buildPhoSyFilename(photo, url, isVideo) {
+  const d = photo.dateCreated ? new Date(photo.dateCreated) : new Date();
+  const datePart = `${d.getFullYear()} ${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getDate()).padStart(2, '0')}`;
+  let stem = '';
+  let ext  = isVideo ? 'mp4' : 'jpg';
+  try {
+    const u = new URL(url);
+    // iCloud met parfois le nom original dans le param 'name'
+    const nameParam = u.searchParams.get('name') || '';
+    const nm = nameParam.match(/^(.+)\.([a-zA-Z0-9]{2,4})$/);
+    if (nm) { stem = nm[1]; ext = nm[2].toLowerCase(); }
+    else {
+      const raw = decodeURIComponent(u.pathname.split('/').pop() || '');
+      const pm  = raw.match(/^(.+)\.([a-zA-Z0-9]{2,4})$/);
+      if (pm) { stem = pm[1]; ext = pm[2].toLowerCase(); }
+    }
+  } catch (_) {}
+  if (!stem) stem = photo.caption || 'photo';
+  return `${datePart} - ${stem}.${ext}`;
 }
 
 async function downloadPhoto(url, filename) {
@@ -108,6 +130,13 @@ export function setupLightboxEvents() {
     if (state.lbIndex < state.filteredPhotos.length - 1) loadLbPhoto(state.lbIndex + 1);
   });
 
+  // Tap sur l'image/vidéo → toggle plein écran (masque/affiche les contrôles)
+  $lbWrap.addEventListener('click', e => {
+    if (state.lbWasSwipe) { state.lbWasSwipe = false; return; }
+    if (e.target.closest('.lb-nav, video, button')) return;
+    $lightbox.classList.toggle('chrome-hidden');
+  });
+
   // Swipe tactile — inhibé si zoom actif
   $lightbox.addEventListener('touchstart', e => {
     state.touchIsZoom = e.touches.length > 1;
@@ -123,6 +152,7 @@ export function setupLightboxEvents() {
     if ((window.visualViewport?.scale ?? 1) > 1.05) return;
     const dx = e.changedTouches[0].clientX - state.touchStartX;
     if (Math.abs(dx) < 50) return;
+    state.lbWasSwipe = true;  // empêche le click suivant de toggler le chrome
     if (dx < 0 && state.lbIndex < state.filteredPhotos.length - 1) loadLbPhoto(state.lbIndex + 1);
     if (dx > 0 && state.lbIndex > 0) loadLbPhoto(state.lbIndex - 1);
   }, { passive: true });

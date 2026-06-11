@@ -19,6 +19,7 @@ export const state = {
 
   touchStartX: 0,
   touchIsZoom: false,
+  lbWasSwipe: false,
 
   settingsPushedHistory: false,
 };
