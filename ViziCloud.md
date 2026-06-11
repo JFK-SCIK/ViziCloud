@@ -93,6 +93,9 @@ Navigateur
                     ├── GET  /albums.json                → liste albums (server/data/)
                     ├── GET  /admin                      → admin.html
                     ├── GET|POST /admin/*                → CRUD albums, deploy, logs
+                    ├── POST /upload                     → reçoit fichiers → data/import/
+                    ├── GET  /import/pending             → liste fichiers en attente
+                    ├── DELETE /import/{filename}        → confirme traitement
                     └── (iCloud sert les images directement au navigateur)
 ```
 
@@ -111,6 +114,90 @@ Navigateur
 ---
 
 ## Roadmap
+
+### Stratégie A — Import photos via iPhone pont (à implémenter)
+
+**Objectif** : permettre d'ajouter des photos à l'album iCloud partagé depuis n'importe quel appareil (PC Windows, Android, navigateur), sans passer par l'app Photos Apple.
+
+**Contrainte de départ :** Apple ne fournit aucune API publique pour uploader dans un album partagé iCloud. La seule voie programmatique passe par PhotoKit — une API native Apple disponible uniquement sur iOS/macOS.
+
+**Solution retenue : iPhone dédié comme pont permanent**
+
+Un vieil iPhone reste branché en permanence (WiFi + charge). Il exécute une automatisation Raccourcis qui surveille un dossier iCloud Drive et y pousse les nouveaux fichiers vers l'album partagé.
+
+**Flux complet :**
+```
+N'importe quel appareil
+    │
+    └─► dépose une photo dans iCloud Drive / ViziCloud_import /
+                (PC Windows via iCloud pour Windows,
+                 iPhone via l'app Fichiers,
+                 futur : upload web via ViziCloud)
+                        │
+                        ▼ (sync iCloud Drive, ~1-5 min)
+              iPhone pont (toujours branché, WiFi on)
+              Raccourci automatique toutes les 15 min :
+                1. Lister les fichiers dans ViziCloud_import/
+                2. Pour chaque fichier → Enregistrer dans Photos
+                3. Ajouter à l'album partagé iCloud
+                4. Supprimer le fichier du dossier (évite doublons)
+                        │
+                        ▼
+              Photo visible dans l'app Photos iPhone de tous ✓
+              Photo visible dans ViziCloud au prochain refresh ✓
+```
+
+**Latence totale :** 1 à 20 min (sync iCloud Drive + attente du déclencheur).
+
+**Prérequis matériels :**
+- iPhone ancien dédié, toujours branché secteur + WiFi
+- iCloud Drive activé sur l'iPhone
+- iCloud pour Windows installé sur le PC (optionnel, si upload depuis PC)
+
+**Pourquoi pas un déclenchement à la demande (push) :**
+- Un PWA ne peut pas déclencher silencieusement des Raccourcis iOS — la sandbox web bloque le pont vers les APIs natives
+- Une app native avec APNs (style Pushcut) le permettrait mais nécessite un compte Apple Developer (99€/an) et une app Swift — hors de portée pour l'usage actuel
+- Le polling 15 min est suffisant pour un album photo de famille
+
+**Ce que ViziCloud n'a pas besoin de faire (côté serveur/front) pour la Stratégie A pure :**
+- Aucun endpoint d'upload à créer
+- La synchronisation avec iCloud est entièrement gérée côté iPhone/Apple
+
+---
+
+### Stratégie B — Upload web via FastAPI (implémenté)
+
+Un bouton d'upload ↑ est affiché dans le header (uniquement sur vizicloud.duckdns.org, pas sur GitHub Pages). Il permet de déposer des photos/vidéos directement depuis n'importe quel navigateur.
+
+**Nouveaux endpoints FastAPI (`server/main.py`) :**
+
+```
+POST   /upload                → reçoit multipart file → server/data/import/
+GET    /import/pending        → liste les fichiers en attente (pour l'iPhone pont)
+DELETE /import/{filename}     → supprime un fichier après import réussi
+```
+
+Authentification optionnelle via `?pwd=...` (variable d'env `VIZICLOUD_UPLOAD_PWD`). Laisser vide = pas de mot de passe pour l'upload.
+
+**Recette Raccourcis iOS (iPhone pont) :**
+
+Créer un Raccourci avec déclencheur automatique toutes les 15 min :
+
+1. **Obtenir contenu de l'URL** `https://vizicloud.duckdns.org/import/pending?pwd=MOT_DE_PASSE`
+   - Méthode : GET
+2. **Répéter avec chaque** élément de `Résultat de l'URL` → `files`
+   - **Variable** : `fichier` (= `{"filename": "...", "size": ...}`)
+   - **Obtenir contenu de l'URL** `https://vizicloud.duckdns.org/import/[fichier.filename]?pwd=MOT_DE_PASSE`
+     - Méthode : GET (télécharge le fichier)
+   - **Enregistrer** dans Photos
+   - **Ajouter à l'album** → album partagé ViziCloud
+   - **Obtenir contenu de l'URL** `https://vizicloud.duckdns.org/import/[fichier.filename]?pwd=MOT_DE_PASSE`
+     - Méthode : DELETE (confirme le traitement)
+3. **Fin Répéter**
+
+**Latence totale :** 1 min (upload web → iPhone traite au prochain cycle) à 15 min (attente déclencheur).
+
+---
 
 ### Prochaine étape : Stratégie B — Cache serveur
 
@@ -181,6 +268,8 @@ télécharge depuis l'album partagé) ou hash MD5 du fichier si photo dans les d
 
 | Décision | Raison |
 |----------|--------|
+| iPhone dédié comme pont iCloud | Seule voie sans compte Apple Developer — PhotoKit inaccessible depuis Linux/Windows |
+| Polling Raccourcis 15 min (pas push) | PWA sandbox bloque web→iOS natif ; app native APNs hors de portée |
 | Vanilla JS, pas de framework | Pas de build, déploiement immédiat sur GitHub Pages |
 | Proxy FastAPI côté serveur | CORS iCloud bloque les requêtes navigateur direct |
 | `dateCreated` parsé comme ISO string | L'API retourne une chaîne, pas un timestamp secondes |

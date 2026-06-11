@@ -6,11 +6,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi.responses import HTMLResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-ADMIN_PWD = os.environ.get('VIZICLOUD_ADMIN_PWD', '')
+IMPORT_DIR = Path(__file__).parent / 'data' / 'import'
+
+ADMIN_PWD  = os.environ.get('VIZICLOUD_ADMIN_PWD',  '')
+UPLOAD_PWD = os.environ.get('VIZICLOUD_UPLOAD_PWD', '')
 BRANCH    = os.environ.get('VIZICLOUD_BRANCH',    'main')
 SERVICE   = os.environ.get('VIZICLOUD_SERVICE',   'vizicloud')
 REPO_DIR  = Path(__file__).parent.parent
@@ -195,6 +198,7 @@ async def _polling_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    IMPORT_DIR.mkdir(parents=True, exist_ok=True)
     _load_vapid()
     asyncio.create_task(_polling_loop())
     yield
@@ -455,6 +459,70 @@ async def deploy_log(pwd: str = ''):
     if log_path.exists():
         return {'log': log_path.read_text(encoding='utf-8', errors='replace')}
     return {'log': ''}
+
+
+# ── Upload / import ───────────────────────────────────────────────────────────
+
+UPLOAD_ALLOWED_MIME = {
+    'image/jpeg', 'image/png', 'image/heic', 'image/heif',
+    'image/gif', 'image/webp', 'image/tiff',
+    'video/mp4', 'video/quicktime', 'video/x-m4v',
+}
+UPLOAD_MAX_BYTES = 200 * 1024 * 1024  # 200 MB
+
+
+def _check_upload_auth(pwd: str):
+    if UPLOAD_PWD and pwd != UPLOAD_PWD:
+        raise HTTPException(status_code=403, detail='Mot de passe incorrect')
+
+
+@app.post('/upload')
+async def upload_file(file: UploadFile = File(...), pwd: str = ''):
+    _check_upload_auth(pwd)
+    if file.content_type and file.content_type not in UPLOAD_ALLOWED_MIME:
+        raise HTTPException(status_code=415, detail=f'Type non supporté : {file.content_type}')
+    safe_name = Path(file.filename or 'upload').name
+    dest = IMPORT_DIR / safe_name
+    # avoid collisions
+    stem = dest.stem
+    suffix = dest.suffix
+    counter = 1
+    while dest.exists():
+        dest = IMPORT_DIR / f'{stem}_{counter}{suffix}'
+        counter += 1
+    total = 0
+    with dest.open('wb') as out:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > UPLOAD_MAX_BYTES:
+                dest.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail='Fichier trop volumineux (max 200 Mo)')
+            out.write(chunk)
+    return {'ok': True, 'filename': dest.name, 'size': total}
+
+
+@app.get('/import/pending')
+async def import_pending(pwd: str = ''):
+    _check_upload_auth(pwd)
+    files = [
+        {'filename': f.name, 'size': f.stat().st_size}
+        for f in sorted(IMPORT_DIR.iterdir(), key=lambda p: p.stat().st_mtime)
+        if f.is_file()
+    ]
+    return {'files': files}
+
+
+@app.delete('/import/{filename}')
+async def import_delete(filename: str, pwd: str = ''):
+    _check_upload_auth(pwd)
+    target = IMPORT_DIR / Path(filename).name  # strip any path traversal
+    if not target.exists():
+        raise HTTPException(status_code=404, detail='Fichier introuvable')
+    target.unlink()
+    return {'ok': True}
 
 
 # ── Static files (last) ───────────────────────────────────────────────────────

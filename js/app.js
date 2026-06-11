@@ -7,6 +7,7 @@ import { buildFilterUI } from './filter.js';
 import { openLightbox, closeLightbox, loadLbPhoto, setupLightboxEvents } from './lightbox.js';
 import { closeSettings, closeSettingsUI, setupSettingsEvents } from './settings.js';
 import { checkVersion, doUpdate, startVersionPolling } from './version.js';
+import { setupUpload } from './upload.js';
 
 /* ── Gallery — délégation de clics ───────────────────────── */
 const $gallery = document.getElementById('gallery');
@@ -22,6 +23,9 @@ $gallery.addEventListener('keydown', e => {
 
 /* ── Settings ─────────────────────────────────────────────── */
 setupSettingsEvents();
+
+/* ── Upload ───────────────────────────────────────────────── */
+setupUpload();
 
 /* ── Lightbox ─────────────────────────────────────────────── */
 setupLightboxEvents();
