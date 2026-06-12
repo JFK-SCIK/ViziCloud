@@ -83,24 +83,25 @@ export async function loadLbPhoto(index) {
 }
 
 function buildPhoSyFilename(photo, url, isVideo) {
-  const d       = photo.dateCreated ? new Date(photo.dateCreated) : new Date();
+  const d        = photo.dateCreated ? new Date(photo.dateCreated) : new Date();
   const datePart = `${d.getFullYear()} ${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getDate()).padStart(2, '0')}`;
-  const album   = state.albumName || 'ViziCloud';
-  const caption = photo.caption ? ` (${photo.caption})` : '';
-  const stem    = `${album}${caption}`;
-  let ext = isVideo ? 'mp4' : 'jpg';
+  const album    = state.albumName || 'ViziCloud';
+  let photoName  = '';
+  let ext        = isVideo ? 'mp4' : 'jpg';
   try {
     const u         = new URL(url);
     const nameParam = u.searchParams.get('name') || '';
-    const nm        = nameParam.match(/\.([a-zA-Z0-9]{2,4})$/);
-    if (nm) ext = nm[1].toLowerCase();
+    const nm        = nameParam.match(/^(.+)\.([a-zA-Z0-9]{2,4})$/);
+    if (nm) { photoName = nm[1]; ext = nm[2].toLowerCase(); }
     else {
       const raw = decodeURIComponent(u.pathname.split('/').pop() || '');
-      const pm  = raw.match(/\.([a-zA-Z0-9]{2,4})$/);
-      if (pm) ext = pm[1].toLowerCase();
+      const pm  = raw.match(/^(.+)\.([a-zA-Z0-9]{2,4})$/);
+      if (pm) { photoName = pm[1]; ext = pm[2].toLowerCase(); }
     }
   } catch (_) {}
-  return `${datePart} - ${stem}.${ext}`;
+  if (!photoName) photoName = photo.caption || '';
+  const suffix = photoName ? ` (${photoName})` : '';
+  return `${datePart} - ${album}${suffix}.${ext}`;
 }
 
 async function downloadPhoto(url, filename) {
