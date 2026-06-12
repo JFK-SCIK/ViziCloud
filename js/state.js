@@ -14,8 +14,11 @@ export const state = {
   loadedCount: 0,
   isLoadingBatch: false,
 
+  albumName: '',
+
   lbIndex: -1,
   lbPushedHistory: false,
+  lbSuppressNextPopstate: false,
 
   touchStartX: 0,
   touchIsZoom: false,

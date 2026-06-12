@@ -83,23 +83,23 @@ export async function loadLbPhoto(index) {
 }
 
 function buildPhoSyFilename(photo, url, isVideo) {
-  const d = photo.dateCreated ? new Date(photo.dateCreated) : new Date();
+  const d       = photo.dateCreated ? new Date(photo.dateCreated) : new Date();
   const datePart = `${d.getFullYear()} ${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getDate()).padStart(2, '0')}`;
-  let stem = '';
-  let ext  = isVideo ? 'mp4' : 'jpg';
+  const album   = state.albumName || 'ViziCloud';
+  const caption = photo.caption ? ` (${photo.caption})` : '';
+  const stem    = `${album}${caption}`;
+  let ext = isVideo ? 'mp4' : 'jpg';
   try {
-    const u = new URL(url);
-    // iCloud met parfois le nom original dans le param 'name'
+    const u         = new URL(url);
     const nameParam = u.searchParams.get('name') || '';
-    const nm = nameParam.match(/^(.+)\.([a-zA-Z0-9]{2,4})$/);
-    if (nm) { stem = nm[1]; ext = nm[2].toLowerCase(); }
+    const nm        = nameParam.match(/\.([a-zA-Z0-9]{2,4})$/);
+    if (nm) ext = nm[1].toLowerCase();
     else {
       const raw = decodeURIComponent(u.pathname.split('/').pop() || '');
-      const pm  = raw.match(/^(.+)\.([a-zA-Z0-9]{2,4})$/);
-      if (pm) { stem = pm[1]; ext = pm[2].toLowerCase(); }
+      const pm  = raw.match(/\.([a-zA-Z0-9]{2,4})$/);
+      if (pm) ext = pm[1].toLowerCase();
     }
   } catch (_) {}
-  if (!stem) stem = photo.caption || 'photo';
   return `${datePart} - ${stem}.${ext}`;
 }
 
@@ -135,6 +135,16 @@ export function setupLightboxEvents() {
     if (state.lbWasSwipe) { state.lbWasSwipe = false; return; }
     if (e.target.closest('.lb-nav, video, button')) return;
     $lightbox.classList.toggle('chrome-hidden');
+  });
+
+  // iOS/Android : quitter le plein écran natif vidéo déclenche un popstate parasite
+  const _suppressFs = () => {
+    state.lbSuppressNextPopstate = true;
+    setTimeout(() => { state.lbSuppressNextPopstate = false; }, 500);
+  };
+  $lbVideo.addEventListener('webkitendfullscreen', _suppressFs);
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) _suppressFs();
   });
 
   // Swipe tactile — inhibé si zoom actif

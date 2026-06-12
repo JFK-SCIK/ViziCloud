@@ -248,6 +248,7 @@ header {
   position: relative;
   overflow: hidden;
   min-height: 0;
+  cursor: pointer;
 }
 
 #lb-img {

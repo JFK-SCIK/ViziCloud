@@ -50,6 +50,8 @@ document.addEventListener('keydown', e => {
 const $lbImg   = document.getElementById('lb-img');
 const $lbVideo = document.getElementById('lb-video');
 window.addEventListener('popstate', () => {
+  // iOS : quitter le plein écran natif vidéo déclenche un popstate parasite
+  if (state.lbSuppressNextPopstate) { state.lbSuppressNextPopstate = false; return; }
   if ($lightbox.classList.contains('open')) {
     state.lbPushedHistory = false;
     $lbVideo.pause();
@@ -103,6 +105,7 @@ async function init() {
     );
 
     if (stream.streamName) {
+      state.albumName = stream.streamName;
       const opt = document.querySelector(`#album-select option[value="${CSS.escape(state.TOKEN)}"]`);
       if (opt) opt.textContent = stream.streamName;
     }
