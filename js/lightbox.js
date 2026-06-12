@@ -15,6 +15,7 @@ const $lbWrap    = document.getElementById('lb-wrap');
 export async function openLightbox(index) {
   state.lbIndex = index;
   $lightbox.classList.add('open');
+  $lightbox.classList.remove('chrome-hidden');
   document.body.style.overflow = 'hidden';
   history.pushState({ lightbox: true }, '');
   state.lbPushedHistory = true;
@@ -40,7 +41,6 @@ export async function loadLbPhoto(index) {
   const photo = state.filteredPhotos[index];
   if (!photo) return;
   state.lbIndex = index;
-  $lightbox.classList.remove('chrome-hidden');
 
   $lbCounter.textContent = `${index + 1} / ${state.filteredPhotos.length}`;
   $lbCaption.textContent = photo.caption || '';
@@ -51,7 +51,6 @@ export async function loadLbPhoto(index) {
   $lbVideo.pause();
   $lbVideo.src = '';
   $lbVideo.style.display = 'none';
-  $lbImg.classList.add('fading');
   $lbImg.src = '';
   $lbImg.style.display = 'block';
 
@@ -66,14 +65,12 @@ export async function loadLbPhoto(index) {
 
   if (src) {
     if (isVid) {
-      $lbImg.classList.remove('fading');
       $lbImg.style.display = 'none';
       $lbVideo.style.display = 'block';
       $lbVideo.src = src;
       $lbVideo.load();
     } else {
-      $lbImg.onload  = () => $lbImg.classList.remove('fading');
-      $lbImg.onerror = () => { $lbImg.classList.remove('fading'); showToast("Impossible de charger l'image"); };
+      $lbImg.onerror = () => showToast("Impossible de charger l'image");
       $lbImg.alt = photo.caption || `Photo ${index + 1}`;
       $lbImg.src = src;
     }

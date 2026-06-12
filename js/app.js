@@ -50,7 +50,9 @@ document.addEventListener('keydown', e => {
 const $lbImg   = document.getElementById('lb-img');
 const $lbVideo = document.getElementById('lb-video');
 window.addEventListener('popstate', () => {
-  // iOS : quitter le plein écran natif vidéo déclenche un popstate parasite
+  // Android : popstate déclenché AVANT fullscreenchange → vérifier l'état synchrone
+  if (document.fullscreenElement) return;
+  // iOS : webkitendfullscreen déclenche un popstate parasite (ordre inversé)
   if (state.lbSuppressNextPopstate) { state.lbSuppressNextPopstate = false; return; }
   if ($lightbox.classList.contains('open')) {
     state.lbPushedHistory = false;

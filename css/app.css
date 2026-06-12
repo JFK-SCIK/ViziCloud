@@ -256,10 +256,7 @@ header {
   max-height: 100%;
   object-fit: contain;
   display: block;
-  opacity: 1;
-  transition: opacity 0.18s;
 }
-#lb-img.fading { opacity: 0; }
 
 #lb-video {
   max-width: 100%;
