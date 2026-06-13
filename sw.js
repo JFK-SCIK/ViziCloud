@@ -1,4 +1,4 @@
-const CACHE = 'vizicloud-v2';
+const CACHE = 'vizicloud-v3';
 const SHELL = [
   './',
   './manifest.json',

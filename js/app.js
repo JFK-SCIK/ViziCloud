@@ -91,6 +91,9 @@ window.addEventListener('focus', _clearNotifications);
 // Aussi au démarrage : app ouverte depuis l'icône (pas de visibilitychange)
 _clearNotifications();
 
+/* ── Orientation : lever le lock posé par le manifest à l'install ── */
+try { screen.orientation.unlock(); } catch (_) {}
+
 /* ── Version polling ──────────────────────────────────────── */
 startVersionPolling();
 
