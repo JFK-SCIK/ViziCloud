@@ -286,10 +286,14 @@ header {
 .lb-nav[hidden] { display: none; }
 
 /* ── Mode plein écran (tap image → cache chrome) ── */
-.lb-header, .lb-footer { transition: opacity 0.25s ease; }
+.lb-header, .lb-footer {
+  transition: opacity 0.25s ease, max-height 0.25s ease, padding 0.25s ease;
+  max-height: 120px;
+  overflow: hidden;
+}
 .lb-nav:not([hidden]) { transition: background 0.15s, opacity 0.25s ease; }
 .lightbox.chrome-hidden .lb-header,
-.lightbox.chrome-hidden .lb-footer,
+.lightbox.chrome-hidden .lb-footer { opacity: 0; pointer-events: none; max-height: 0; padding-top: 0; padding-bottom: 0; }
 .lightbox.chrome-hidden .lb-nav { opacity: 0; pointer-events: none; }
 
 .lb-footer {

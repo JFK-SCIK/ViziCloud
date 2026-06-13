@@ -12,10 +12,16 @@ const $lbPrev    = document.getElementById('lb-prev');
 const $lbNext    = document.getElementById('lb-next');
 const $lbWrap    = document.getElementById('lb-wrap');
 
+const _landscape = window.matchMedia('(orientation: landscape)');
+_landscape.addEventListener('change', mq => {
+  if (!$lightbox.classList.contains('open')) return;
+  $lightbox.classList.toggle('chrome-hidden', mq.matches);
+});
+
 export async function openLightbox(index) {
   state.lbIndex = index;
   $lightbox.classList.add('open');
-  $lightbox.classList.remove('chrome-hidden');
+  $lightbox.classList.toggle('chrome-hidden', _landscape.matches);
   document.body.style.overflow = 'hidden';
   history.pushState({ lightbox: true }, '');
   state.lbPushedHistory = true;
