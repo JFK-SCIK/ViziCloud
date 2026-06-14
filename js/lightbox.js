@@ -12,16 +12,26 @@ const $lbPrev    = document.getElementById('lb-prev');
 const $lbNext    = document.getElementById('lb-next');
 const $lbWrap    = document.getElementById('lb-wrap');
 
+function _enterFullscreen() {
+  document.documentElement.requestFullscreen().catch(() => {});
+}
+function _exitFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+
 const _landscape = window.matchMedia('(orientation: landscape)');
 _landscape.addEventListener('change', mq => {
   if (!$lightbox.classList.contains('open')) return;
   $lightbox.classList.toggle('chrome-hidden', mq.matches);
+  if (mq.matches) _enterFullscreen(); else _exitFullscreen();
 });
 
 export async function openLightbox(index) {
   state.lbIndex = index;
   $lightbox.classList.add('open');
-  $lightbox.classList.toggle('chrome-hidden', _landscape.matches);
+  const inLandscape = _landscape.matches;
+  $lightbox.classList.toggle('chrome-hidden', inLandscape);
+  if (inLandscape) _enterFullscreen();
   document.body.style.overflow = 'hidden';
   history.pushState({ lightbox: true }, '');
   state.lbPushedHistory = true;
@@ -29,6 +39,7 @@ export async function openLightbox(index) {
 }
 
 export function closeLightbox() {
+  _exitFullscreen();
   $lbVideo.pause();
   $lbVideo.src = '';
   $lbVideo.style.display = 'none';
@@ -134,22 +145,24 @@ export function setupLightboxEvents() {
     if (state.lbIndex < state.filteredPhotos.length - 1) loadLbPhoto(state.lbIndex + 1);
   });
 
-  // Tap sur l'image/vidéo → toggle plein écran (masque/affiche les contrôles)
+  // Tap image → toggle chrome-hidden + plein écran OS
   $lbWrap.addEventListener('click', e => {
     if (state.lbWasSwipe) { state.lbWasSwipe = false; return; }
     if (e.target.closest('.lb-nav, video, button')) return;
+    const willHide = !$lightbox.classList.contains('chrome-hidden');
     $lightbox.classList.toggle('chrome-hidden');
+    if (willHide) _enterFullscreen(); else _exitFullscreen();
   });
 
-  // iOS/Android : quitter le plein écran natif vidéo déclenche un popstate parasite
+  // Plein écran vidéo natif : fullscreenchange/webkitendfullscreen
+  // déclenche un popstate parasite — on le supprime SAUF si c'est notre propre fullscreen
   const _suppressFs = () => {
+    if (document.fullscreenElement === document.documentElement) return;
     state.lbSuppressNextPopstate = true;
     setTimeout(() => { state.lbSuppressNextPopstate = false; }, 500);
   };
   $lbVideo.addEventListener('webkitendfullscreen', _suppressFs);
-  document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement) _suppressFs();
-  });
+  document.addEventListener('fullscreenchange', _suppressFs);
 
   // Swipe tactile — inhibé si zoom actif
   $lightbox.addEventListener('touchstart', e => {
@@ -166,7 +179,7 @@ export function setupLightboxEvents() {
     if ((window.visualViewport?.scale ?? 1) > 1.05) return;
     const dx = e.changedTouches[0].clientX - state.touchStartX;
     if (Math.abs(dx) < 50) return;
-    state.lbWasSwipe = true;  // empêche le click suivant de toggler le chrome
+    state.lbWasSwipe = true;
     if (dx < 0 && state.lbIndex < state.filteredPhotos.length - 1) loadLbPhoto(state.lbIndex + 1);
     if (dx > 0 && state.lbIndex > 0) loadLbPhoto(state.lbIndex - 1);
   }, { passive: true });
