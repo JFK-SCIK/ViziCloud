@@ -97,17 +97,23 @@ export async function loadLbPhoto(index) {
     } else {
       $lbImg.onerror = async () => {
         // URL iCloud expirée : purger le cache et retenter une fois
-        delete state.urlCache[photo.photoGuid];
+        // Capturer le guid maintenant — après l'await l'utilisateur a peut-être swipé
+        const guid = photo.photoGuid;
+        delete state.urlCache[guid];
         try {
-          await ensureUrls([photo.photoGuid]);
-          const fresh = state.urlCache[photo.photoGuid];
+          await ensureUrls([guid]);
+          // Vérifier qu'on est toujours sur la même photo
+          if (state.filteredPhotos[state.lbIndex]?.photoGuid !== guid) return;
+          const fresh = state.urlCache[guid];
           if (fresh?.full || fresh?.thumb) {
             $lbImg.onerror = () => showToast("Impossible de charger l'image");
             $lbImg.src = fresh.full || fresh.thumb;
             return;
           }
         } catch (_) {}
-        showToast("Impossible de charger l'image");
+        if (state.filteredPhotos[state.lbIndex]?.photoGuid === guid) {
+          showToast("Impossible de charger l'image");
+        }
       };
       $lbImg.alt = photo.caption || `Photo ${index + 1}`;
       $lbImg.src = src;
@@ -115,6 +121,12 @@ export async function loadLbPhoto(index) {
   }
 
   document.getElementById('lb-download-btn').onclick = () => downloadPhoto(src, buildPhoSyFilename(photo, src, isVid));
+
+  // Précharger silencieusement l'URL de la photo suivante
+  const nextPhoto = state.filteredPhotos[index + 1];
+  if (nextPhoto && !state.urlCache[nextPhoto.photoGuid]) {
+    ensureUrls([nextPhoto.photoGuid]).catch(() => {});
+  }
 }
 
 function buildPhoSyFilename(photo, url, isVideo) {
