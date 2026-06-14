@@ -40,10 +40,13 @@ export async function openLightbox(index) {
 
 export function closeLightbox() {
   _exitFullscreen();
+  $lbImg.onload  = null;
+  $lbImg.onerror = null;
+  $lbImg.src     = '';
   $lbVideo.pause();
-  $lbVideo.src = '';
+  $lbVideo.removeAttribute('src');
+  $lbVideo.load();
   $lbVideo.style.display = 'none';
-  $lbImg.src = '';
   $lbImg.style.display = 'block';
   $lightbox.classList.remove('open', 'chrome-hidden');
   document.body.style.overflow = '';
@@ -65,11 +68,16 @@ export async function loadLbPhoto(index) {
   $lbPrev.hidden = index <= 0;
   $lbNext.hidden = index >= state.filteredPhotos.length - 1;
 
-  $lbVideo.pause();
-  $lbVideo.src = '';
-  $lbVideo.style.display = 'none';
-  $lbImg.src = '';
+  // Libérer proprement les ressources de la photo/vidéo précédente
+  $lbImg.onload  = null;
+  $lbImg.onerror = null;
+  $lbImg.src     = '';
   $lbImg.style.display = 'block';
+
+  $lbVideo.pause();
+  $lbVideo.removeAttribute('src');  // removeAttribute + load() libère la mémoire vidéo
+  $lbVideo.load();
+  $lbVideo.style.display = 'none';
 
   if (!state.urlCache[photo.photoGuid]) {
     try { await ensureUrls([photo.photoGuid]); }
@@ -87,7 +95,20 @@ export async function loadLbPhoto(index) {
       $lbVideo.src = src;
       $lbVideo.load();
     } else {
-      $lbImg.onerror = () => showToast("Impossible de charger l'image");
+      $lbImg.onerror = async () => {
+        // URL iCloud expirée : purger le cache et retenter une fois
+        delete state.urlCache[photo.photoGuid];
+        try {
+          await ensureUrls([photo.photoGuid]);
+          const fresh = state.urlCache[photo.photoGuid];
+          if (fresh?.full || fresh?.thumb) {
+            $lbImg.onerror = () => showToast("Impossible de charger l'image");
+            $lbImg.src = fresh.full || fresh.thumb;
+            return;
+          }
+        } catch (_) {}
+        showToast("Impossible de charger l'image");
+      };
       $lbImg.alt = photo.caption || `Photo ${index + 1}`;
       $lbImg.src = src;
     }

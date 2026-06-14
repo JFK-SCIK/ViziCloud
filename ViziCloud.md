@@ -12,14 +12,15 @@ Hébergée sur GitHub Pages, proxifiée par un serveur FastAPI sur GCP.
 
 ---
 
-## État actuel (mai 2026)
+## État actuel (juin 2026)
 
 ### Stack
 - HTML/CSS/JS vanilla avec ES modules natifs (`type="module"`) — pas de build, pas de framework
-- FastAPI (`server/main.py`) : proxy iCloud + serveur de fichiers statiques
+- FastAPI (`server/main.py`) : proxy iCloud + serveur de fichiers statiques + upload
 - Caddy : reverse proxy HTTPS avec Let's Encrypt
 - GitHub Actions : génère `version.json` (hash commit) à chaque push sur `main`
-- Service worker (`sw.js`) : cache offline basique, bypass appels iCloud et POST
+- Service worker (`sw.js`) : cache offline basique (`vizicloud-v3`), bypass appels iCloud/push/admin
+- PWA installable Android : `manifest.json` orientation `any` + `screen.orientation.unlock()`
 
 ### Fonctionnalités implémentées
 - Galerie grille responsive (2/3/4 colonnes selon écran)
@@ -27,7 +28,7 @@ Hébergée sur GitHub Pages, proxifiée par un serveur FastAPI sur GCP.
 - Lightbox : navigation prev/next, swipe tactile, clavier
 - Swipe inhibé quand image zoomée (`visualViewport.scale`)
 - Lecture vidéo dans la lightbox (`<video>` auto-détecté)
-- Téléchargement photo/vidéo
+- Téléchargement photo/vidéo avec nommage PhoSy : `AAAA MM JJ - Album (nom_fichier).ext`
 - Bouton retour dans lightbox + bouton Android back (History API)
 - Gestion du 330 redirect iCloud (côté proxy)
 - Multi-albums via `albums.json` + sélecteur dans le header
@@ -38,6 +39,11 @@ Hébergée sur GitHub Pages, proxifiée par un serveur FastAPI sur GCP.
 - Panneau paramètres slide-in avec back Android
 - Détection `dateCreated` ISO string vs timestamp numérique (`toDate()`)
 - Badge point bleu sur ⚙️ quand filtre actif
+- **Mode plein écran lightbox** : tap image → masque chrome (header/footer/nav) + barre système Android (`requestFullscreen`), auto-masquage en paysage, swipe sans rechrome
+- **Auto-rotation** : manifest `orientation: any` + `screen.orientation.unlock()` au boot
+- **Push notifications** : VAPID (pywebpush 2.x, clé base64url), abonnement par appareil, badge PWA, effacement badge à l'ouverture
+- **Upload photos** : bouton ↑ header (proxy uniquement) → `POST /upload` → `server/data/import/` ; `GET /import/pending` + `DELETE /import/{file}` pour l'iPhone pont
+- **iPhone pont (Dropbox)** : Raccourci iOS toutes les 15 min poll `ViziCloud_import/` → Photos → album partagé iCloud
 
 ### Fichiers clés
 ```
@@ -127,17 +133,16 @@ Un vieil iPhone reste branché en permanence (WiFi + charge). Il exécute une au
 
 **Flux complet :**
 ```
-N'importe quel appareil
-    │
-    └─► dépose une photo dans iCloud Drive / ViziCloud_import /
-                (PC Windows via iCloud pour Windows,
-                 iPhone via l'app Fichiers,
-                 futur : upload web via ViziCloud)
+Android (app Dropbox)
+PC Windows (app Dropbox)
+iPhone / iPad (app Dropbox)
+        │
+        └─► dépose une photo dans Dropbox / ViziCloud_import /
                         │
-                        ▼ (sync iCloud Drive, ~1-5 min)
+                        ▼ (sync Dropbox, ~1-2 min)
               iPhone pont (toujours branché, WiFi on)
               Raccourci automatique toutes les 15 min :
-                1. Lister les fichiers dans ViziCloud_import/
+                1. Lister les fichiers dans Dropbox / ViziCloud_import /
                 2. Pour chaque fichier → Enregistrer dans Photos
                 3. Ajouter à l'album partagé iCloud
                 4. Supprimer le fichier du dossier (évite doublons)
@@ -147,17 +152,53 @@ N'importe quel appareil
               Photo visible dans ViziCloud au prochain refresh ✓
 ```
 
-**Latence totale :** 1 à 20 min (sync iCloud Drive + attente du déclencheur).
+**Latence totale :** 1 à 20 min (sync Dropbox ~1-2 min + attente du déclencheur).
+
+**Pourquoi Dropbox plutôt qu'iCloud Drive :**
+- App Dropbox officielle sur Android — partage natif depuis la galerie en 2 taps
+- Pas besoin d'iCloud pour Windows sur le PC
+- Fonctionne depuis n'importe quel appareil
 
 **Prérequis matériels :**
 - iPhone ancien dédié, toujours branché secteur + WiFi
-- iCloud Drive activé sur l'iPhone
-- iCloud pour Windows installé sur le PC (optionnel, si upload depuis PC)
+- App Dropbox installée sur l'iPhone pont + dossier `ViziCloud_import` partagé
+- App Dropbox sur les appareils des contributeurs (Android, PC, iPhone principal)
 
 **Pourquoi pas un déclenchement à la demande (push) :**
 - Un PWA ne peut pas déclencher silencieusement des Raccourcis iOS — la sandbox web bloque le pont vers les APIs natives
 - Une app native avec APNs (style Pushcut) le permettrait mais nécessite un compte Apple Developer (99€/an) et une app Swift — hors de portée pour l'usage actuel
 - Le polling 15 min est suffisant pour un album photo de famille
+
+**Installation du Raccourci (depuis la page admin sur l'iPhone pont) :**
+
+Le fichier `.shortcut` est hébergé sur le FastAPI (un par album). La page admin propose
+un bouton par album qui ouvre :
+```
+shortcuts://import-shortcut?url=https://vizicloud.duckdns.org/shortcuts/{album}.shortcut
+```
+L'app Raccourcis s'ouvre avec le Raccourci pré-configuré (bon dossier Dropbox, bon album iCloud).
+L'utilisateur tape "Ajouter" — une seule action manuelle.
+
+**Supervision — heartbeat :**
+
+Le Raccourci inclut une action HTTP à chaque exécution :
+```
+POST /api/heartbeat  { "album": "AlbumFamille", "source": "iphone-pont", "processed": 3 }
+```
+La page admin affiche l'état en temps réel :
+```
+AlbumFamille   iPhone pont ✓  — dernier sync il y a 8 min (3 photos traitées)
+AlbumVacances  iPhone pont ⚠️ — aucun signal depuis 2h
+```
+
+**Endpoints FastAPI à ajouter :**
+```
+GET  /shortcuts/{album}.shortcut   → fichier .shortcut pré-configuré à télécharger
+POST /api/heartbeat                → enregistre timestamp + stats par album
+GET  /api/heartbeat                → état de tous les ponts (pour admin.html)
+```
+
+**Stockage heartbeat :** JSON simple ou colonne dans SQLite (si Stratégie B déjà en place).
 
 **Ce que ViziCloud n'a pas besoin de faire (côté serveur/front) pour la Stratégie A pure :**
 - Aucun endpoint d'upload à créer
