@@ -25,4 +25,7 @@ export const state = {
   lbWasSwipe: false,
 
   settingsPushedHistory: false,
+
+  prefetchSize: parseInt(localStorage.getItem('vc-prefetch-size') || '1', 10),
+  imgCache: {},
 };

@@ -25,9 +25,25 @@ export function closeSettings() {
   }
 }
 
+function setupPrefetchControl() {
+  const ctrl = document.getElementById('prefetch-ctrl');
+  const btns = ctrl.querySelectorAll('.seg-opt');
+  const update = val => btns.forEach(b => b.classList.toggle('active', b.dataset.val === String(val)));
+  update(state.prefetchSize);
+  ctrl.addEventListener('click', e => {
+    const btn = e.target.closest('.seg-opt');
+    if (!btn) return;
+    const val = parseInt(btn.dataset.val, 10);
+    state.prefetchSize = val;
+    localStorage.setItem('vc-prefetch-size', String(val));
+    update(val);
+  });
+}
+
 export function setupSettingsEvents() {
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('settings-close').addEventListener('click', closeSettings);
   $overlay.addEventListener('click', closeSettings);
   setupNotificationToggle();
+  setupPrefetchControl();
 }

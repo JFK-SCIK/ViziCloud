@@ -48,6 +48,10 @@ export function closeLightbox() {
   $lbVideo.load();
   $lbVideo.style.display = 'none';
   $lbImg.style.display = 'block';
+  for (const guid of Object.keys(state.imgCache)) {
+    state.imgCache[guid].src = '';
+    delete state.imgCache[guid];
+  }
   $lightbox.classList.remove('open', 'chrome-hidden');
   document.body.style.overflow = '';
   state.lbIndex = -1;
@@ -122,10 +126,42 @@ export async function loadLbPhoto(index) {
 
   document.getElementById('lb-download-btn').onclick = () => downloadPhoto(src, buildPhoSyFilename(photo, src, isVid));
 
-  // Précharger silencieusement l'URL de la photo suivante
-  const nextPhoto = state.filteredPhotos[index + 1];
-  if (nextPhoto && !state.urlCache[nextPhoto.photoGuid]) {
-    ensureUrls([nextPhoto.photoGuid]).catch(() => {});
+  _prefetch(index);
+}
+
+function _prefetch(centerIndex) {
+  const size     = state.prefetchSize;
+  const keepGuids = new Set();
+  for (let i = centerIndex - size; i <= centerIndex + size; i++) {
+    const p = state.filteredPhotos[i];
+    if (p) keepGuids.add(p.photoGuid);
+  }
+
+  // Éviction : libérer les images hors fenêtre de préchargement
+  for (const guid of Object.keys(state.imgCache)) {
+    if (!keepGuids.has(guid)) {
+      state.imgCache[guid].src = '';
+      delete state.imgCache[guid];
+    }
+  }
+
+  // Précharger : URLs + pixels pour les photos dans la fenêtre (hors courante)
+  const currentGuid = state.filteredPhotos[centerIndex]?.photoGuid;
+  for (const guid of keepGuids) {
+    if (guid === currentGuid) continue;
+    if (state.imgCache[guid]) continue;
+    (async () => {
+      if (!state.urlCache[guid]) {
+        try { await ensureUrls([guid]); } catch (_) { return; }
+      }
+      const urls = state.urlCache[guid];
+      if (!urls || urls.isVideo) return; // pas de préchargement vidéo
+      const src = urls.full || urls.thumb;
+      if (!src || state.imgCache[guid]) return;
+      const img = new Image();
+      img.src = src;
+      state.imgCache[guid] = img;
+    })();
   }
 }
 

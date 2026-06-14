@@ -475,3 +475,27 @@ header {
 }
 #settings-btn { position: relative; }
 #settings-btn.filter-on .filter-active-dot { display: block; }
+
+/* ── CONTRÔLE SEGMENTÉ ── */
+.seg-ctrl {
+  display: flex;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.seg-opt {
+  flex: 1;
+  padding: 0.25rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.seg-opt + .seg-opt { border-left: 1px solid var(--border); }
+.seg-opt.active { background: var(--accent); color: white; }
