@@ -64,7 +64,7 @@ window.addEventListener('popstate', () => {
     $lbVideo.style.display = 'none';
     $lbImg.src = '';
     $lbImg.style.display = 'block';
-    $lightbox.classList.remove('open');
+    $lightbox.classList.remove('open', 'chrome-hidden'); // chrome-hidden doit être nettoyé
     document.body.style.overflow = '';
     state.lbIndex = -1;
   } else if ($settingsPanel.classList.contains('open')) {

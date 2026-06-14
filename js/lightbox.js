@@ -49,7 +49,7 @@ export function closeLightbox() {
   $lbVideo.style.display = 'none';
   $lbImg.style.display = 'block';
   for (const guid of Object.keys(state.imgCache)) {
-    state.imgCache[guid].src = '';
+    if (state.imgCache[guid]) URL.revokeObjectURL(state.imgCache[guid]);
     delete state.imgCache[guid];
   }
   $lightbox.classList.remove('open', 'chrome-hidden');
@@ -88,9 +88,12 @@ export async function loadLbPhoto(index) {
     catch (e) { showToast(`Erreur : ${e.message}`); return; }
   }
 
-  const urls  = state.urlCache[photo.photoGuid] || {};
-  const src   = urls.full || urls.thumb || '';
-  const isVid = urls.isVideo || false;
+  const urls    = state.urlCache[photo.photoGuid] || {};
+  const isVid   = urls.isVideo || false;
+  // Utiliser le blob URL préchargé si disponible (évite tout re-téléchargement)
+  const blobUrl = typeof state.imgCache[photo.photoGuid] === 'string'
+    ? state.imgCache[photo.photoGuid] : null;
+  const src     = blobUrl || urls.full || urls.thumb || '';
 
   if (src) {
     if (isVid) {
@@ -100,13 +103,23 @@ export async function loadLbPhoto(index) {
       $lbVideo.load();
     } else {
       $lbImg.onerror = async () => {
-        // URL iCloud expirée : purger le cache et retenter une fois
-        // Capturer le guid maintenant — après l'await l'utilisateur a peut-être swipé
         const guid = photo.photoGuid;
+        // Blob URL invalide (rare) : supprimer et retomber sur l'URL iCloud
+        if (src.startsWith('blob:')) {
+          URL.revokeObjectURL(src);
+          delete state.imgCache[guid];
+          if (state.filteredPhotos[state.lbIndex]?.photoGuid !== guid) return;
+          const directSrc = urls.full || urls.thumb;
+          if (directSrc) {
+            $lbImg.onerror = () => showToast("Impossible de charger l'image");
+            $lbImg.src = directSrc;
+          } else showToast("Impossible de charger l'image");
+          return;
+        }
+        // URL iCloud expirée : purger et retenter
         delete state.urlCache[guid];
         try {
           await ensureUrls([guid]);
-          // Vérifier qu'on est toujours sur la même photo
           if (state.filteredPhotos[state.lbIndex]?.photoGuid !== guid) return;
           const fresh = state.urlCache[guid];
           if (fresh?.full || fresh?.thumb) {
@@ -130,37 +143,38 @@ export async function loadLbPhoto(index) {
 }
 
 function _prefetch(centerIndex) {
-  const size     = state.prefetchSize;
+  const size      = state.prefetchSize;
   const keepGuids = new Set();
   for (let i = centerIndex - size; i <= centerIndex + size; i++) {
     const p = state.filteredPhotos[i];
     if (p) keepGuids.add(p.photoGuid);
   }
 
-  // Éviction : libérer les images hors fenêtre de préchargement
+  // Éviction : révoquer les blob URLs hors fenêtre
   for (const guid of Object.keys(state.imgCache)) {
     if (!keepGuids.has(guid)) {
-      state.imgCache[guid].src = '';
+      if (state.imgCache[guid]) URL.revokeObjectURL(state.imgCache[guid]);
       delete state.imgCache[guid];
     }
   }
 
-  // Précharger : URLs + pixels pour les photos dans la fenêtre (hors courante)
   const currentGuid = state.filteredPhotos[centerIndex]?.photoGuid;
   for (const guid of keepGuids) {
     if (guid === currentGuid) continue;
-    if (state.imgCache[guid]) continue;
+    if (guid in state.imgCache) continue; // null (en cours) ou blob URL (prêt)
+    state.imgCache[guid] = null; // marquer "en cours de téléchargement"
     (async () => {
-      if (!state.urlCache[guid]) {
-        try { await ensureUrls([guid]); } catch (_) { return; }
-      }
-      const urls = state.urlCache[guid];
-      if (!urls || urls.isVideo) return; // pas de préchargement vidéo
-      const src = urls.full || urls.thumb;
-      if (!src || state.imgCache[guid]) return;
-      const img = new Image();
-      img.src = src;
-      state.imgCache[guid] = img;
+      try {
+        if (!state.urlCache[guid]) await ensureUrls([guid]);
+        const urls = state.urlCache[guid];
+        if (!urls || urls.isVideo) { delete state.imgCache[guid]; return; }
+        const src = urls.full || urls.thumb;
+        if (!src) { delete state.imgCache[guid]; return; }
+        const res = await fetch(src);
+        if (!res.ok) { delete state.imgCache[guid]; return; }
+        if (!(guid in state.imgCache)) return; // évictée pendant le fetch
+        state.imgCache[guid] = URL.createObjectURL(await res.blob());
+      } catch (_) { delete state.imgCache[guid]; }
     })();
   }
 }
