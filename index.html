@@ -120,12 +120,11 @@
       <h3>Performance</h3>
       <div class="settings-row">
         <span>Préchargement</span>
-        <div class="seg-ctrl" id="prefetch-ctrl" role="group" aria-label="Photos préchargées de chaque côté">
-          <button class="seg-opt" data-val="1">1</button>
-          <button class="seg-opt" data-val="2">2</button>
-        </div>
+        <span class="settings-muted" id="prefetch-label">1</span>
       </div>
-      <p class="settings-sub">Photos préchargées de chaque côté</p>
+      <input type="range" id="prefetch-range" min="0" max="2" step="1" class="pf-range">
+      <div class="pf-ticks"><span>0</span><span>1</span><span>2</span></div>
+      <p class="settings-sub">Photos préchargées de chaque côté (0 = désactivé)</p>
     </section>
     <section class="settings-section">
       <h3>À propos</h3>

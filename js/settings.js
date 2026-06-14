@@ -26,17 +26,15 @@ export function closeSettings() {
 }
 
 function setupPrefetchControl() {
-  const ctrl = document.getElementById('prefetch-ctrl');
-  const btns = ctrl.querySelectorAll('.seg-opt');
-  const update = val => btns.forEach(b => b.classList.toggle('active', b.dataset.val === String(val)));
-  update(state.prefetchSize);
-  ctrl.addEventListener('click', e => {
-    const btn = e.target.closest('.seg-opt');
-    if (!btn) return;
-    const val = parseInt(btn.dataset.val, 10);
+  const range = document.getElementById('prefetch-range');
+  const label = document.getElementById('prefetch-label');
+  range.value = state.prefetchSize;
+  label.textContent = state.prefetchSize;
+  range.addEventListener('input', () => {
+    const val = parseInt(range.value, 10);
     state.prefetchSize = val;
     localStorage.setItem('vc-prefetch-size', String(val));
-    update(val);
+    label.textContent = val;
   });
 }
 
