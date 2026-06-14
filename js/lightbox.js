@@ -72,10 +72,10 @@ export async function loadLbPhoto(index) {
   $lbPrev.hidden = index <= 0;
   $lbNext.hidden = index >= state.filteredPhotos.length - 1;
 
-  // Libérer proprement les ressources de la photo/vidéo précédente
+  // Annuler les handlers précédents — NE PAS vider src :
+  // l'ancienne image reste visible jusqu'à ce que la nouvelle soit prête (pas de flash noir)
   $lbImg.onload  = null;
   $lbImg.onerror = null;
-  $lbImg.src     = '';
   $lbImg.style.display = 'block';
 
   $lbVideo.pause();
