@@ -12,8 +12,11 @@ const $lbPrev    = document.getElementById('lb-prev');
 const $lbNext    = document.getElementById('lb-next');
 const $lbWrap    = document.getElementById('lb-wrap');
 
+let _ourFullscreen = false;
+
 function _enterFullscreen() {
-  document.documentElement.requestFullscreen().catch(() => {});
+  _ourFullscreen = true;
+  document.documentElement.requestFullscreen().catch(() => { _ourFullscreen = false; });
 }
 function _exitFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -237,15 +240,26 @@ export function setupLightboxEvents() {
     if (willHide) _enterFullscreen(); else _exitFullscreen();
   });
 
-  // Plein écran vidéo natif : fullscreenchange/webkitendfullscreen
-  // déclenche un popstate parasite — on le supprime SAUF si c'est notre propre fullscreen
-  const _suppressFs = () => {
-    if (document.fullscreenElement === document.documentElement) return;
+  // fullscreenchange : distinguer notre fullscreen du plein écran vidéo natif
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement === document.documentElement) return; // on vient d'entrer → rien
+    if (_ourFullscreen) {
+      // On vient de quitter NOTRE fullscreen (tap image, rotation, OS, closeLightbox)
+      // → nettoyer chrome-hidden si l'OS nous a éjectés sans passer par nos handlers
+      _ourFullscreen = false;
+      if ($lightbox.classList.contains('open')) $lightbox.classList.remove('chrome-hidden');
+      // Ne PAS supprimer le prochain popstate
+    } else {
+      // Plein écran vidéo natif (Android) terminé → supprimer le popstate parasite
+      state.lbSuppressNextPopstate = true;
+      setTimeout(() => { state.lbSuppressNextPopstate = false; }, 500);
+    }
+  });
+  // iOS : fin du plein écran vidéo natif → même suppression
+  $lbVideo.addEventListener('webkitendfullscreen', () => {
     state.lbSuppressNextPopstate = true;
     setTimeout(() => { state.lbSuppressNextPopstate = false; }, 500);
-  };
-  $lbVideo.addEventListener('webkitendfullscreen', _suppressFs);
-  document.addEventListener('fullscreenchange', _suppressFs);
+  });
 
   // Swipe tactile — inhibé si zoom actif
   $lightbox.addEventListener('touchstart', e => {
